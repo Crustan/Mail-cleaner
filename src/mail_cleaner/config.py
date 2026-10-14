@@ -1,0 +1,91 @@
+"""Thresholds and rule data. Mirrors the product brief; tune from shadow data."""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+# Shadow mode only needs to read. Never widen this in the spike.
+GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+
+DATA_DIR = Path(os.environ.get("MAIL_CLEANER_DATA_DIR", "data"))
+SHADOW_LOG = DATA_DIR / "shadow_log.jsonl"
+CREDENTIALS_FILE = Path("credentials.json")
+TOKEN_FILE = Path("token.json")
+
+# Confidence floors per the brief's data-loss-prevention table.
+CONFIDENCE_FLOOR = {"ad": 0.95, "expired": 0.98}
+
+LLM_MODEL = os.environ.get("MAIL_CLEANER_MODEL", "claude-opus-5-5")
+LLM_DISABLED = os.environ.get("MAIL_CLEANER_NO_LLM", "0") == "1"
+
+# Protected categories: any hit short-circuits to PROTECTED before rules or model.
+# Swedish + English (open question in the brief: both kept until decided otherwise).
+PROTECTED_SUBJECT_KEYWORDS = [
+    # finance / transactional
+    "receipt", "kvitto", "invoice", "faktura", "payment", "betalning",
+    "order confirmation", "orderbekräftelse", "contract", "avtal",
+    # security / account
+    "verification code", "verifieringskod", "password", "lösenord",
+    "security alert", "säkerhetsvarning", "sign-in", "inloggning", "2fa",
+    # travel / legal / government
+    "boarding pass", "itinerary", "resplan", "booking", "bokning",
+    "skatteverket", "försäkringskassan", "tax", "deklaration",
+]
+
+# Domains never touched regardless of content. Extend via data/protected_domains.txt.
+PROTECTED_DOMAINS = {
+    "skatteverket.se", "forsakringskassan.se", "1177.se",
+}
+
+# Gmail labels that short-circuit to PROTECTED.
+PROTECTED_LABELS = {"STARRED", "IMPORTANT", "SENT"}
+
+# Advertising signals (rule layer). Weights sum per message; see rules.py.
+AD_HEADER_SIGNALS = {
+    "list-unsubscribe": 0.55,
+    "precedence": 0.15,       # only counted when value is bulk/list
+    "x-campaign": 0.20,
+    "x-mailer": 0.05,
+}
+
+BULK_SENDER_DOMAINS = {
+    # ESP platforms commonly used for marketing sends
+    "mailchimp.com", "mailchimpapp.net", "sendgrid.net", "rsgsv.net",
+    "mailgun.org", "amazonses.com", "braze.com", "klaviyomail.com",
+    "mailjet.com", "getresponse.com", "cmail19.com", "cmail20.com",
+}
+
+PROMO_SUBJECT_KEYWORDS = [
+    # English
+    "sale", "% off", "discount", "deal", "offer", "free shipping",
+    "last chance", "limited time", "new arrivals", "newsletter",
+    # Swedish
+    "rea", "rabatt", "erbjudande", "kampanj", "fri frakt",
+    "sista chansen", "nyhetsbrev", "utförsäljning",
+]
+
+# Expired-notification senders with per-type expiry in days (brief: rule-driven
+# expiry per sender type; external state like "PR closed" is out of spike scope —
+# age past expiry is the only rule here).
+NOTIFICATION_SENDERS = {
+    "github.com": 14,
+    "azuredevops.microsoft.com": 14,
+    "visualstudio.com": 14,
+    "vinted.se": 7,
+    "vinted.com": 7,
+    "facebookmail.com": 7,
+    "linkedin.com": 14,
+}
+
+
+def load_protected_senders() -> set[str]:
+    """User-maintained allowlist: one address or domain per line."""
+    path = DATA_DIR / "protected_senders.txt"
+    if not path.exists():
+        return set()
+    return {
+        line.strip().lower()
+        for line in path.read_text().splitlines()
+        if line.strip() and not line.startswith("#")
+    }

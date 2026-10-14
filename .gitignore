@@ -1,0 +1,17 @@
+# Secrets and tokens — never commit
+credentials.json
+token.json
+.env
+
+# Shadow-run output (contains email metadata)
+data/
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+.pytest_cache/
