@@ -1,0 +1,23 @@
+[project]
+name = "mail-cleaner"
+version = "0.1.0"
+description = "Shadow-mode spike: classify Gmail inbox mail (ads / expired notifications), log decisions, take no actions."
+requires-python = ">=3.11"
+dependencies = [
+    "google-api-python-client>=2.100",
+    "google-auth-oauthlib>=1.2",
+    "anthropic>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+mail-cleaner = "mail_cleaner.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
