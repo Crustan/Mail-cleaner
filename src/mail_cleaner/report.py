@@ -37,6 +37,16 @@ def render(rows: list[dict]) -> str:
         count = by_verdict.get(verdict, 0)
         lines.append(f"  {verdict:<10} {count:>5}  ({count / total:.0%})")
 
+    protected_reasons = Counter(
+        ":".join(row["signals"][0].split(":")[:2]) if row["signals"] else "unknown"
+        for row in rows
+        if row["verdict"] == "protected"
+    )
+    if protected_reasons:
+        lines += ["", "Protected by:"]
+        for reason, count in protected_reasons.most_common():
+            lines.append(f"  {reason:<20} {count:>5}")
+
     would_move = by_verdict.get("ad", 0) + by_verdict.get("expired", 0)
     lines += [
         "",

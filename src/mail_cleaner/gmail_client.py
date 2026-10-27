@@ -42,12 +42,14 @@ def get_service():
     return build("gmail", "v1", credentials=creds)
 
 
-# Gmail search per scope. "in:all" is All Mail: archive + inbox, no spam/trash.
+# Gmail search per scope. Spam and trash are excluded everywhere: Gmail already
+# handles spam, and acting on it would double-handle (seen leaking through in:all).
 SCOPE_QUERIES = {
     "inbox": "in:inbox",
-    "archive": "in:all -in:inbox",
-    "all": "in:all",
+    "archive": "in:all -in:inbox -in:spam -in:trash",
+    "all": "in:all -in:spam -in:trash",
 }
+EXCLUDED_LABELS = {"SPAM", "TRASH"}
 
 
 def iter_messages(service, days: int, scope: str = "inbox", limit: int | None = None):
@@ -74,7 +76,10 @@ def iter_messages(service, days: int, scope: str = "inbox", limit: int | None = 
                 )
                 .execute()
             )
-            yield _to_meta(msg)
+            meta = _to_meta(msg)
+            if EXCLUDED_LABELS.intersection(meta.labels):
+                continue
+            yield meta
             yielded += 1
             if limit and yielded >= limit:
                 return
