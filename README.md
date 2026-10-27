@@ -12,7 +12,13 @@ Gmail inbox triage: classifies mail as **advertising**, **expired notification**
 
 ## Setup
 
-1. Python 3.11+: `pip install -e ".[dev]"`
+1. Python 3.11+ in a virtualenv (macOS has no bare `pip`; system python may be too old — `brew install python@3.12` if needed):
+
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate   # rerun in every new terminal
+   pip install -e ".[dev]"
+   ```
 2. Google Cloud Console: create a project → enable **Gmail API** → OAuth consent screen in **Testing** mode (add your own address as test user) → create an **OAuth client ID (Desktop app)** → download as `credentials.json` into the repo root. Testing mode avoids the restricted-scope (CASA) review entirely for personal use.
 3. For the LLM layer: `export ANTHROPIC_API_KEY=...` (see `.env.example`). Refusal fallback is enabled server-side so a safety decline degrades gracefully. Skip with `MAIL_CLEANER_NO_LLM=1` for a rules-only run.
 
