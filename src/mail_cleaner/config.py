@@ -38,8 +38,10 @@ PROTECTED_DOMAINS = {
     "skatteverket.se", "forsakringskassan.se", "1177.se",
 }
 
-# Gmail labels that short-circuit to PROTECTED.
-PROTECTED_LABELS = {"STARRED", "IMPORTANT", "SENT"}
+# Gmail labels that short-circuit to PROTECTED. IMPORTANT is deliberately absent:
+# Gmail auto-applies it to ~90% of archived mail (measured in a live sweep), and the
+# API cannot distinguish user-marked from auto-marked importance.
+PROTECTED_LABELS = {"STARRED", "SENT"}
 
 # Advertising signals (rule layer). Weights sum per message; see rules.py.
 AD_HEADER_SIGNALS = {
