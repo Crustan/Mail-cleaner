@@ -26,8 +26,15 @@ Gmail inbox triage: classifies mail as **advertising**, **expired notification**
 
 ```bash
 mail-cleaner auth                 # one-time browser OAuth; verifies read access
-mail-cleaner shadow --days 7      # classify last 7 days, append to data/shadow_log.jsonl
+mail-cleaner shadow --days 7      # classify last 7 days of inbox, append to data/shadow_log.jsonl
 mail-cleaner report               # per-sender totals, verdict split, LLM share, unsure list
+```
+
+Scopes: `--scope inbox` (default), `--scope archive` (All Mail minus inbox — the backlog), `--scope all`. A backlog sweep:
+
+```bash
+MAIL_CLEANER_NO_LLM=1 mail-cleaner shadow --scope archive --days 1825 --limit 2000
+mail-cleaner report
 ```
 
 Add senders/domains to always keep in `data/protected_senders.txt` (one per line).

@@ -42,9 +42,17 @@ def get_service():
     return build("gmail", "v1", credentials=creds)
 
 
-def iter_inbox_messages(service, days: int, limit: int | None = None):
-    """Yield EmailMeta for inbox mail from the last `days` days, metadata only."""
-    query = f"in:inbox newer_than:{days}d"
+# Gmail search per scope. "in:all" is All Mail: archive + inbox, no spam/trash.
+SCOPE_QUERIES = {
+    "inbox": "in:inbox",
+    "archive": "in:all -in:inbox",
+    "all": "in:all",
+}
+
+
+def iter_messages(service, days: int, scope: str = "inbox", limit: int | None = None):
+    """Yield EmailMeta for mail in `scope` from the last `days` days, metadata only."""
+    query = f"{SCOPE_QUERIES[scope]} newer_than:{days}d"
     page_token = None
     yielded = 0
     while True:
