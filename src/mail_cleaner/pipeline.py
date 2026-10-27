@@ -10,8 +10,10 @@ import anthropic
 from mail_cleaner import config, llm, protected, rules
 from mail_cleaner.models import Decision, EmailMeta, Verdict
 
-# Rules alone decide at or above this; between the floor and this, the LLM confirms.
-RULES_DECIDE_AT = 0.80
+# Below this the rules alone decide "keep"; from here up to the ad floor the LLM
+# decides. Header rules cap out around 0.70 for a typical newsletter, so a higher
+# cut-off strands most real ads in "unsure" (live sweep: 32% unsure at 0.80).
+LLM_CONSULT_AT = 0.30
 
 
 def decide(
@@ -30,9 +32,8 @@ def decide(
     score, signals = rules.ad_score(meta)
     if score >= config.CONFIDENCE_FLOOR["ad"]:
         return _decision(meta, Verdict.AD, score, "rules", signals)
-    if score < RULES_DECIDE_AT:
-        verdict = Verdict.KEEP if score < 0.30 else Verdict.UNSURE
-        return _decision(meta, verdict, score, "rules", signals or ["no-ad-signals"])
+    if score < LLM_CONSULT_AT:
+        return _decision(meta, Verdict.KEEP, score, "rules", signals or ["no-ad-signals"])
 
     # Rules lean ad but below the floor — ask the LLM to confirm.
     category, llm_conf, llm_reason = llm.classify(meta, client)

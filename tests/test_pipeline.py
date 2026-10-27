@@ -74,12 +74,19 @@ def test_old_github_notification_expired():
 
 def test_midband_score_goes_to_llm_and_degrades_to_unsure_when_disabled(monkeypatch):
     monkeypatch.setattr(config, "LLM_DISABLED", True)
-    # list-unsubscribe + bulk precedence + promo subject ≈ 0.85: above RULES_DECIDE_AT,
-    # below the 0.95 floor → LLM path; disabled LLM must leave it in the inbox.
-    m = meta(
-        subject="Newsletter: new arrivals",
-        headers={"list-unsubscribe": "<mailto:u@x>", "precedence": "bulk"},
-    )
+    # Bare list-unsubscribe ≈ 0.55: above LLM_CONSULT_AT, below the 0.95 floor →
+    # LLM path; disabled LLM must leave it in the inbox.
+    m = meta(subject="Weekly digest", headers={"list-unsubscribe": "<mailto:u@x>"})
     decision = decide(m, protected_senders=set())
     assert decision.verdict == Verdict.UNSURE
     assert decision.used_llm
+
+
+def test_security_localpart_is_protected_despite_notification_age():
+    m = meta(
+        sender_email="security@facebookmail.com",
+        sender_domain="facebookmail.com",
+        date_epoch_ms=int(time.time() * 1000) - 60 * 86_400_000,
+    )
+    decision = decide(m, protected_senders=set())
+    assert decision.verdict == Verdict.PROTECTED
