@@ -44,7 +44,7 @@ def decide(
     # Rules lean ad but below the floor — ask the LLM to confirm.
     category, llm_conf, llm_reason = llm.classify(meta, client)
     signals = signals + [f"llm:{category}:{llm_reason}"]
-    if category == "ad" and llm_conf >= config.CONFIDENCE_FLOOR["ad"]:
+    if category == "ad" and llm_conf >= config.LLM_AD_ACCEPT:
         return _decision(meta, Verdict.AD, llm_conf, "llm", signals, used_llm=True)
     if category == "keep":
         return _decision(meta, Verdict.KEEP, llm_conf, "llm", signals, used_llm=True)

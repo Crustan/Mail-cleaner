@@ -13,8 +13,14 @@ SHADOW_LOG = DATA_DIR / "shadow_log.jsonl"
 CREDENTIALS_FILE = Path("credentials.json")
 TOKEN_FILE = Path("token.json")
 
-# Confidence floors per the brief's data-loss-prevention table.
+# Confidence floors per the brief's data-loss-prevention table (rule scores).
 CONFIDENCE_FLOOR = {"ad": 0.95, "expired": 0.98}
+
+# Acceptance threshold for an LLM "ad" verdict. The model's self-reported
+# confidence is conservative (brief finding 7): in live runs it lands at
+# 0.75–0.90 on ads that are plainly correct, so 0.95 strands them in unsure.
+# Tuned from shadow data; revisit against restore rates once actions exist.
+LLM_AD_ACCEPT = 0.75
 
 LLM_MODEL = os.environ.get("MAIL_CLEANER_MODEL", "claude-opus-5-5")
 LLM_DISABLED = os.environ.get("MAIL_CLEANER_NO_LLM", "0") == "1"
