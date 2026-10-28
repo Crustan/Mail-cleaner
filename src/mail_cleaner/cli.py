@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 
-from mail_cleaner import actions, config, gmail_client, pipeline, report
+from mail_cleaner import actions, config, filters, gmail_client, pipeline, report
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -59,6 +59,14 @@ def main(argv: list[str] | None = None) -> int:
         "--no-learn", action="store_true", help="Restore only; don't add to protected list"
     )
 
+    filters_cmd = sub.add_parser(
+        "filters", help="Create native Gmail filters for stable ad senders (dry run unless --yes)"
+    )
+    filters_cmd.add_argument(
+        "--min", type=int, default=None, help=f"Min ad verdicts per sender (default {config.FILTER_MIN_ADS})"
+    )
+    filters_cmd.add_argument("--yes", action="store_true", help="Create the filters (default: dry run)")
+
     args = parser.parse_args(argv)
 
     if args.command == "auth":
@@ -98,6 +106,27 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "undo":
         undone = actions.undo(gmail_client.get_service(), args.run)
         print(f"Undid {undone} actions from run {args.run}.")
+        return 0
+
+    if args.command == "filters":
+        cands = filters.candidates(report.load_log(), args.min)
+        if not cands:
+            print("No stable ad senders yet. Run more shadow sweeps first.")
+            return 0
+        service = gmail_client.get_service()
+        already = filters.existing_filter_senders(service)
+        new = [(s, n) for s, n in cands if s not in already]
+        skipped = len(cands) - len(new)
+        print(f"Filter candidates ({len(new)} new, {skipped} already filtered):")
+        for sender, n in new:
+            print(f"  {n:>4}  {sender}")
+        if not new:
+            return 0
+        if not args.yes:
+            print("\nDry run — rerun with --yes to create Gmail filters (label Cleanup/Ads, skip inbox).")
+            return 0
+        created = filters.create_filters(service, [s for s, _ in new])
+        print(f"Created {created} Gmail filters. Manage them under Gmail Settings → Filters.")
         return 0
 
     if args.command == "rescue":

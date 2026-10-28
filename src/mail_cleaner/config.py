@@ -9,7 +9,15 @@ from pathlib import Path
 # Phase 2 (suggest mode): modify = read + labels + trash. Still no send, and
 # permanent deletion is not possible with this scope (Gmail trash auto-purges
 # after 30 days — the brief's retention window, provider-enforced).
-GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
+# settings.basic is for native Gmail filters only (brief finding 19).
+GMAIL_SCOPES = [
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://www.googleapis.com/auth/gmail.settings.basic",
+]
+
+# A sender becomes a native-filter candidate after this many ad verdicts
+# with zero keep/protected verdicts.
+FILTER_MIN_ADS = 3
 
 DATA_DIR = Path(os.environ.get("MAIL_CLEANER_DATA_DIR", "data"))
 SHADOW_LOG = DATA_DIR / "shadow_log.jsonl"
@@ -123,6 +131,19 @@ def load_notification_senders() -> dict[str, int]:
 def load_protected_senders() -> set[str]:
     """User-maintained allowlist: one address or domain per line."""
     path = DATA_DIR / "protected_senders.txt"
+    if not path.exists():
+        return set()
+    return {
+        line.strip().lower()
+        for line in path.read_text().splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+
+
+def load_quarantine_senders() -> set[str]:
+    """User-maintained force-quarantine list (sender-level rules): one address
+    or domain per line. Protected checks still win over this list."""
+    path = DATA_DIR / "quarantine_senders.txt"
     if not path.exists():
         return set()
     return {

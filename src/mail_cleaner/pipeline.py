@@ -25,6 +25,10 @@ def decide(
     if reason:
         return _decision(meta, Verdict.PROTECTED, 1.0, "protected", [reason])
 
+    quarantine = config.load_quarantine_senders()
+    if meta.sender_email in quarantine or meta.sender_domain in quarantine:
+        return _decision(meta, Verdict.AD, 1.0, "rules", ["sender-rule:quarantine"])
+
     exp_score, exp_signals = rules.expired_score(meta)
     if exp_score >= config.CONFIDENCE_FLOOR["expired"]:
         return _decision(meta, Verdict.EXPIRED, exp_score, "rules", exp_signals)

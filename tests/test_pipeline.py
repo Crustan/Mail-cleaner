@@ -82,6 +82,21 @@ def test_midband_score_goes_to_llm_and_degrades_to_unsure_when_disabled(monkeypa
     assert decision.used_llm
 
 
+def test_quarantine_sender_list_forces_ad(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    (tmp_path / "quarantine_senders.txt").write_text("shop.example\n")
+    decision = decide(meta(subject="Hi"), protected_senders=set())
+    assert decision.verdict == Verdict.AD
+    assert decision.signals == ["sender-rule:quarantine"]
+
+
+def test_protected_wins_over_quarantine_list(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    (tmp_path / "quarantine_senders.txt").write_text("shop.example\n")
+    decision = decide(meta(labels=["STARRED"]), protected_senders=set())
+    assert decision.verdict == Verdict.PROTECTED
+
+
 def test_old_security_notification_expires_by_age():
     m = meta(
         sender_email="security@facebookmail.com",
