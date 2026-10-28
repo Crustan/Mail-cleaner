@@ -29,6 +29,12 @@ def decide(
     if exp_score >= config.CONFIDENCE_FLOOR["expired"]:
         return _decision(meta, Verdict.EXPIRED, exp_score, "rules", exp_signals)
 
+    # Security senders may expire by age (above), but are never ad-classified
+    # and never reach the LLM — a stale alert can go, a fresh one stays put.
+    local_part = meta.sender_email.split("@", 1)[0]
+    if local_part.startswith(("security", "account-security")):
+        return _decision(meta, Verdict.KEEP, 1.0, "rules", ["security-sender-localpart"])
+
     score, signals = rules.ad_score(meta)
     if score >= config.CONFIDENCE_FLOOR["ad"]:
         return _decision(meta, Verdict.AD, score, "rules", signals)

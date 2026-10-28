@@ -19,12 +19,6 @@ def protected_reason(meta: EmailMeta, protected_senders: set[str]) -> str | None
     if meta.sender_domain in config.PROTECTED_DOMAINS:
         return "protected-domain"
 
-    # Security/account mail is always untouched, whatever its age or language
-    # (live sweep flagged old security@facebookmail.com as expired).
-    local_part = meta.sender_email.split("@", 1)[0]
-    if local_part.startswith("security") or local_part.startswith("account-security"):
-        return "protected-sender:security-localpart"
-
     subject = meta.subject.lower()
     for keyword in config.PROTECTED_SUBJECT_KEYWORDS:
         if keyword in subject:
