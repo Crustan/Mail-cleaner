@@ -57,7 +57,7 @@ def expired_score(meta: EmailMeta, now_ms: int | None = None) -> tuple[float, li
     now_ms = now_ms or int(time.time() * 1000)
 
     expiry_days = None
-    for domain, days in config.NOTIFICATION_SENDERS.items():
+    for domain, days in config.load_notification_senders().items():
         if meta.sender_domain == domain or meta.sender_domain.endswith("." + domain):
             expiry_days = days
             break

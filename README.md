@@ -37,7 +37,7 @@ MAIL_CLEANER_NO_LLM=1 mail-cleaner shadow --scope archive --days 1825 --limit 20
 mail-cleaner report
 ```
 
-Add senders/domains to always keep in `data/protected_senders.txt` (one per line).
+Add senders/domains to always keep in `data/protected_senders.txt` (one per line). Override notification expiry in `data/notification_senders.txt` (`domain days` per line, `0` disables; defaults in `config.py`).
 
 ## What to measure in the week
 

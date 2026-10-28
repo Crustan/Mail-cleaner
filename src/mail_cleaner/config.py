@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import os
 from pathlib import Path
 
@@ -75,7 +76,8 @@ PROMO_SUBJECT_KEYWORDS = [
 
 # Expired-notification senders with per-type expiry in days (brief: rule-driven
 # expiry per sender type; external state like "PR closed" is out of spike scope —
-# age past expiry is the only rule here).
+# age past expiry is the only rule here). Protected categories run first, so
+# receipts/order confirmations from these domains are still shielded by keyword.
 NOTIFICATION_SENDERS = {
     "github.com": 14,
     "azuredevops.microsoft.com": 14,
@@ -84,7 +86,33 @@ NOTIFICATION_SENDERS = {
     "vinted.com": 7,
     "facebookmail.com": 7,
     "linkedin.com": 14,
+    # Delivery/engagement notices — disposable once aged (owner feedback)
+    "airmee.com": 7,
+    "amazon.se": 14,
+    "amazon.com": 14,
+    "dev.to": 14,
 }
+
+
+@functools.cache
+def load_notification_senders() -> dict[str, int]:
+    """Defaults merged with user overrides from data/notification_senders.txt
+    (one `domain days` per line; days 0 disables expiry for that domain)."""
+    senders = dict(NOTIFICATION_SENDERS)
+    path = DATA_DIR / "notification_senders.txt"
+    if path.exists():
+        for line in path.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split()
+            if len(parts) == 2 and parts[1].isdigit():
+                days = int(parts[1])
+                if days == 0:
+                    senders.pop(parts[0].lower(), None)
+                else:
+                    senders[parts[0].lower()] = days
+    return senders
 
 
 def load_protected_senders() -> set[str]:
