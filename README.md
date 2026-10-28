@@ -45,6 +45,13 @@ mail-cleaner apply                      # dry run: per-sender plan, nothing happ
 mail-cleaner apply --yes                # label as Cleanup/Ads / Cleanup/Expired
 mail-cleaner apply --trash --yes        # or move to Gmail trash (30-day auto-purge)
 mail-cleaner undo --run <id>            # reverse a run (id printed by apply)
+mail-cleaner rescue --sender x@y.se     # restore that sender's mail + always keep them
+```
+
+Daily cleanup on a Mac — run the inbox sweep on a schedule (crontab -e):
+
+```cron
+0 7,19 * * * cd /path/to/Mail-cleaner && .venv/bin/mail-cleaner shadow --scope inbox --days 2 && .venv/bin/mail-cleaner apply --yes >> data/cron.log 2>&1
 ```
 
 Add senders/domains to always keep in `data/protected_senders.txt` (one per line). Override notification expiry in `data/notification_senders.txt` (`domain days` per line, `0` disables; defaults in `config.py`).

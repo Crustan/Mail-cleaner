@@ -129,36 +129,56 @@ def apply(service, planned: list[dict], trash: bool) -> str:
     return run_id if done else ""
 
 
-def undo(service, run_id: str) -> int:
-    """Reverse every action of a run: untrash, remove labels, restore INBOX."""
+def _load_entries(run_id: str | None = None, sender: str | None = None) -> list[dict]:
     if not config.ACTIONS_LOG.exists():
-        return 0
+        return []
     entries = [
         json.loads(line)
         for line in config.ACTIONS_LOG.read_text().splitlines()
-        if line.strip() and json.loads(line)["run_id"] == run_id
+        if line.strip()
     ]
-    label_ids = ensure_labels(service)
+    if run_id:
+        entries = [e for e in entries if e["run_id"] == run_id]
+    if sender:
+        entries = [e for e in entries if e["sender_email"] == sender.lower()]
+    return entries
 
-    undone = 0
-    for entry in entries:
-        msg_id = entry["message_id"]
-        try:
-            if entry["action"] == "trash":
-                service.users().messages().untrash(userId="me", id=msg_id).execute()
-            body = {
-                "addLabelIds": ["INBOX"] if entry["had_inbox"] else [],
-                "removeLabelIds": [label_ids[entry["label"]]]
-                if entry["action"] == "label"
-                else [],
-            }
-            if body["addLabelIds"] or body["removeLabelIds"]:
-                service.users().messages().modify(
-                    userId="me", id=msg_id, body=body
-                ).execute()
-        except HttpError as exc:
-            if exc.resp.status == 404:
-                continue
-            raise
-        undone += 1
-    return undone
+
+def _reverse_entry(service, entry: dict, label_ids: dict[str, str]) -> bool:
+    msg_id = entry["message_id"]
+    try:
+        if entry["action"] == "trash":
+            service.users().messages().untrash(userId="me", id=msg_id).execute()
+        body = {
+            "addLabelIds": ["INBOX"] if entry["had_inbox"] else [],
+            "removeLabelIds": [label_ids[entry["label"]]]
+            if entry["action"] == "label"
+            else [],
+        }
+        if body["addLabelIds"] or body["removeLabelIds"]:
+            service.users().messages().modify(userId="me", id=msg_id, body=body).execute()
+    except HttpError as exc:
+        if exc.resp.status == 404:
+            return False
+        raise
+    return True
+
+
+def undo(service, run_id: str) -> int:
+    """Reverse every action of a run: untrash, remove labels, restore INBOX.
+    Mechanical reversal — teaches nothing (a bulk undo is not a keep signal)."""
+    label_ids = ensure_labels(service)
+    return sum(
+        _reverse_entry(service, entry, label_ids) for entry in _load_entries(run_id)
+    )
+
+
+def rescue(service, sender: str, run_id: str | None = None, learn: bool = True) -> tuple[int, bool]:
+    """Restore everything actioned for one sender and (by default) add them to the
+    protected list, so the pipeline never touches that sender again — the brief's
+    "one-tap restore + always keep sender". Returns (restored, newly_learned)."""
+    entries = _load_entries(run_id, sender)
+    label_ids = ensure_labels(service)
+    restored = sum(_reverse_entry(service, entry, label_ids) for entry in entries)
+    learned = bool(config.add_protected_senders({sender})) if learn else False
+    return restored, learned

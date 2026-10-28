@@ -50,6 +50,15 @@ def main(argv: list[str] | None = None) -> int:
     undo_cmd = sub.add_parser("undo", help="Reverse an apply run")
     undo_cmd.add_argument("--run", required=True, help="Run id printed by apply")
 
+    rescue_cmd = sub.add_parser(
+        "rescue", help="Restore one sender's actioned mail and always keep them"
+    )
+    rescue_cmd.add_argument("--sender", required=True, help="Sender email to restore")
+    rescue_cmd.add_argument("--run", default=None, help="Limit to one run (default: all)")
+    rescue_cmd.add_argument(
+        "--no-learn", action="store_true", help="Restore only; don't add to protected list"
+    )
+
     args = parser.parse_args(argv)
 
     if args.command == "auth":
@@ -89,6 +98,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "undo":
         undone = actions.undo(gmail_client.get_service(), args.run)
         print(f"Undid {undone} actions from run {args.run}.")
+        return 0
+
+    if args.command == "rescue":
+        restored, learned = actions.rescue(
+            gmail_client.get_service(), args.sender, args.run, learn=not args.no_learn
+        )
+        print(f"Restored {restored} messages from {args.sender}.")
+        if learned:
+            print(f"{args.sender} added to the protected list — never touched again.")
+        elif not args.no_learn:
+            print(f"{args.sender} was already on the protected list.")
         return 0
 
     return 1
