@@ -130,3 +130,14 @@ def load_protected_senders() -> set[str]:
         for line in path.read_text().splitlines()
         if line.strip() and not line.startswith("#")
     }
+
+
+def add_protected_senders(senders: set[str]) -> set[str]:
+    """Append senders not already listed; returns the ones actually added."""
+    new = {s.lower() for s in senders} - load_protected_senders()
+    if new:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        with (DATA_DIR / "protected_senders.txt").open("a") as f:
+            for sender in sorted(new):
+                f.write(sender + "\n")
+    return new
