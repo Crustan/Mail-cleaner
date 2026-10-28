@@ -9,7 +9,15 @@ from pathlib import Path
 # Phase 2 (suggest mode): modify = read + labels + trash. Still no send, and
 # permanent deletion is not possible with this scope (Gmail trash auto-purges
 # after 30 days — the brief's retention window, provider-enforced).
-GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
+# settings.basic is for native Gmail filters only (brief finding 19).
+GMAIL_SCOPES = [
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://www.googleapis.com/auth/gmail.settings.basic",
+]
+
+# A sender becomes a native-filter candidate after this many ad verdicts
+# with zero keep/protected verdicts.
+FILTER_MIN_ADS = 3
 
 DATA_DIR = Path(os.environ.get("MAIL_CLEANER_DATA_DIR", "data"))
 SHADOW_LOG = DATA_DIR / "shadow_log.jsonl"

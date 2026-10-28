@@ -46,7 +46,11 @@ mail-cleaner apply --yes                # label as Cleanup/Ads / Cleanup/Expired
 mail-cleaner apply --trash --yes        # or move to Gmail trash (30-day auto-purge)
 mail-cleaner undo --run <id>            # reverse a run (id printed by apply)
 mail-cleaner rescue --sender x@y.se     # restore that sender's mail + always keep them
+mail-cleaner filters                    # dry run: stable ad senders worth a native Gmail filter
+mail-cleaner filters --yes              # create the filters (label Cleanup/Ads + skip inbox)
 ```
+
+Native filters run inside Gmail at delivery — zero API/LLM cost, works when the tool is off. Only consistently-ad senders qualify (≥ 3 ad verdicts, zero keep/protected); expiry can't be a filter since it's age-based. The `filters` command needs the `gmail.settings.basic` scope — re-consent with `rm token.json && mail-cleaner auth` after upgrading.
 
 Daily cleanup on a Mac — run the inbox sweep on a schedule (crontab -e):
 
