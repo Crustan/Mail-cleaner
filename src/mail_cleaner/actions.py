@@ -173,12 +173,48 @@ def undo(service, run_id: str) -> int:
     )
 
 
+def _strip_quarantine_labels(service, sender: str, label_ids: dict[str, str]) -> int:
+    """Remove Cleanup labels from the sender's mail wherever they came from
+    (this tool, a Gmail filter, or a manual label)."""
+    removed = 0
+    for name in QUARANTINE_LABELS.values():
+        label_id = label_ids[name]
+        page_token = None
+        while True:
+            result = (
+                service.users()
+                .messages()
+                .list(
+                    userId="me",
+                    labelIds=[label_id],
+                    q=f"from:{sender}",
+                    pageToken=page_token,
+                )
+                .execute()
+            )
+            ids = [m["id"] for m in result.get("messages", [])]
+            if ids:
+                service.users().messages().batchModify(
+                    userId="me", body={"ids": ids, "removeLabelIds": [label_id]}
+                ).execute()
+                removed += len(ids)
+            page_token = result.get("nextPageToken")
+            if not page_token:
+                break
+    return removed
+
+
 def rescue(service, sender: str, run_id: str | None = None, learn: bool = True) -> tuple[int, bool]:
-    """Restore everything actioned for one sender and (by default) add them to the
-    protected list, so the pipeline never touches that sender again — the brief's
-    "one-tap restore + always keep sender". Returns (restored, newly_learned)."""
+    """Restore everything quarantined for one sender — the tool's own logged
+    actions (untrash, INBOX restore) plus any Cleanup label on their mail,
+    however it got there — and (by default) add them to the protected list:
+    the brief's "one-tap restore + always keep sender".
+    Returns (restored, newly_learned)."""
     entries = _load_entries(run_id, sender)
     label_ids = ensure_labels(service)
     restored = sum(_reverse_entry(service, entry, label_ids) for entry in entries)
+    # Log reversal already stripped the tool's own labels, so the live sweep
+    # only finds mail labeled by other means (manual, Gmail filter).
+    restored += _strip_quarantine_labels(service, sender, label_ids)
     learned = bool(config.add_protected_senders({sender})) if learn else False
     return restored, learned
