@@ -55,7 +55,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "auth":
         service = gmail_client.get_service()
         profile = service.users().getProfile(userId="me").execute()
-        print(f"Authenticated as {profile['emailAddress']} (read-only scope)")
+        granted = json.loads(config.TOKEN_FILE.read_text()).get("scopes", [])
+        scopes = ", ".join(s.rsplit("/", 1)[-1] for s in granted) or "unknown"
+        print(f"Authenticated as {profile['emailAddress']} (scopes: {scopes})")
+        if not set(config.GMAIL_SCOPES).issubset(granted):
+            print(
+                "Token is missing a configured scope — run: rm token.json && mail-cleaner auth"
+            )
         return 0
 
     if args.command == "shadow":
