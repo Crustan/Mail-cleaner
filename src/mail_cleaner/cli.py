@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 
-from mail_cleaner import config, gmail_client, pipeline, report
+from mail_cleaner import actions, config, gmail_client, pipeline, report
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -30,6 +30,26 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("report", help="Per-sender report from the shadow log")
 
+    apply_cmd = sub.add_parser(
+        "apply", help="Act on shadow verdicts (dry run unless --yes)"
+    )
+    apply_cmd.add_argument(
+        "--verdict",
+        action="append",
+        choices=sorted(actions.ACTIONABLE_VERDICTS),
+        help="Verdicts to act on (default: ad and expired)",
+    )
+    apply_cmd.add_argument(
+        "--trash",
+        action="store_true",
+        help="Move to Gmail trash (auto-purged by Gmail after 30 days) instead of labeling",
+    )
+    apply_cmd.add_argument("--max", type=int, default=None, help="Cap actions this run")
+    apply_cmd.add_argument("--yes", action="store_true", help="Execute (default: dry run)")
+
+    undo_cmd = sub.add_parser("undo", help="Reverse an apply run")
+    undo_cmd.add_argument("--run", required=True, help="Run id printed by apply")
+
     args = parser.parse_args(argv)
 
     if args.command == "auth":
@@ -43,6 +63,26 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "report":
         print(report.render(report.load_log()))
+        return 0
+
+    if args.command == "apply":
+        verdicts = set(args.verdict) if args.verdict else actions.ACTIONABLE_VERDICTS
+        planned = actions.plan(report.load_log(), verdicts, args.max)
+        if not planned:
+            print("Nothing to act on. Run a shadow sweep first.")
+            return 0
+        print(actions.describe_plan(planned, args.trash))
+        if not args.yes:
+            print("\nDry run — rerun with --yes to execute.")
+            return 0
+        run_id = actions.apply(gmail_client.get_service(), planned, args.trash)
+        if run_id:
+            print(f"Applied. Undo with: mail-cleaner undo --run {run_id}")
+        return 0
+
+    if args.command == "undo":
+        undone = actions.undo(gmail_client.get_service(), args.run)
+        print(f"Undid {undone} actions from run {args.run}.")
         return 0
 
     return 1

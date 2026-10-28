@@ -6,11 +6,14 @@ import functools
 import os
 from pathlib import Path
 
-# Shadow mode only needs to read. Never widen this in the spike.
-GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+# Phase 2 (suggest mode): modify = read + labels + trash. Still no send, and
+# permanent deletion is not possible with this scope (Gmail trash auto-purges
+# after 30 days — the brief's retention window, provider-enforced).
+GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 
 DATA_DIR = Path(os.environ.get("MAIL_CLEANER_DATA_DIR", "data"))
 SHADOW_LOG = DATA_DIR / "shadow_log.jsonl"
+ACTIONS_LOG = DATA_DIR / "actions_log.jsonl"
 CREDENTIALS_FILE = Path("credentials.json")
 TOKEN_FILE = Path("token.json")
 
@@ -20,8 +23,10 @@ CONFIDENCE_FLOOR = {"ad": 0.95, "expired": 0.98}
 # Acceptance threshold for an LLM "ad" verdict. The model's self-reported
 # confidence is conservative (brief finding 7): in live runs it lands at
 # 0.75–0.90 on ads that are plainly correct, so 0.95 strands them in unsure.
-# Tuned from shadow data; revisit against restore rates once actions exist.
-LLM_AD_ACCEPT = 0.75
+# Owner reviewed the full 2,000-message sweep (2026-10-28): every remaining
+# low-confidence ad call was correct too, so the bar sits at 0.50 now.
+# Revisit against restore rates once actions exist.
+LLM_AD_ACCEPT = 0.50
 
 LLM_MODEL = os.environ.get("MAIL_CLEANER_MODEL", "claude-opus-5-5")
 LLM_DISABLED = os.environ.get("MAIL_CLEANER_NO_LLM", "0") == "1"

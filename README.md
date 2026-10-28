@@ -2,9 +2,10 @@
 
 Gmail inbox triage: classifies mail as **advertising**, **expired notification** or **keep**, logs every decision with its reason, and **takes no action on the mailbox**. This is the shadow-mode spike from the [product brief](https://claude.ai/artifact/Qs33NN84AaSzXRaQCWEiQH) — its job is to produce a week of real precision data before any UX or write-scope is built.
 
-## Safety properties of this spike
+## Safety properties
 
-- **Read-only OAuth scope** (`gmail.readonly`). The code cannot move, label or delete anything.
+- **No send scope, no permanent deletion.** Phase 2 uses `gmail.modify`: labels and Gmail trash only. Trash is Gmail-reversible for 30 days and purged by the provider — the brief's retention window, enforced by Gmail itself.
+- **Dry run by default.** `apply` only prints its per-sender plan; `--yes` executes, and every run is undoable (`mail-cleaner undo --run <id>`).
 - **Protected beats predicted**: starred/important/sent mail, protected categories (receipts, invoices, security, travel, government — Swedish and English) and your allowlist are excluded before any classification runs.
 - **Metadata first**: classification uses headers, labels and the Gmail snippet. Full bodies and attachments are never fetched, and nothing but the decision log is stored.
 - **LLM is the last layer**: most mail is decided by header rules; only rule-ambiguous mail (expected: a small share) reaches the model, with addresses and digit runs masked first.
@@ -35,6 +36,15 @@ Scopes: `--scope inbox` (default), `--scope archive` (All Mail minus inbox — t
 ```bash
 MAIL_CLEANER_NO_LLM=1 mail-cleaner shadow --scope archive --days 1825 --limit 2000
 mail-cleaner report
+```
+
+Acting on verdicts (phase 2 — after reviewing the report; first re-auth for the modify scope with `rm token.json && mail-cleaner auth`):
+
+```bash
+mail-cleaner apply                      # dry run: per-sender plan, nothing happens
+mail-cleaner apply --yes                # label as Cleanup/Ads / Cleanup/Expired
+mail-cleaner apply --trash --yes        # or move to Gmail trash (30-day auto-purge)
+mail-cleaner undo --run <id>            # reverse a run (id printed by apply)
 ```
 
 Add senders/domains to always keep in `data/protected_senders.txt` (one per line). Override notification expiry in `data/notification_senders.txt` (`domain days` per line, `0` disables; defaults in `config.py`).

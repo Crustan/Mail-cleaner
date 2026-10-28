@@ -41,9 +41,11 @@ class Decision:
     source: str              # "protected" | "rules" | "llm"
     signals: list[str]
     used_llm: bool = False
+    model: str | None = None  # LLM model configured for this decision, if used
 
     def to_log(self) -> dict:
         return {
+            **({"model": self.model} if self.used_llm and self.model else {}),
             "message_id": self.message_id,
             "sender_email": self.sender_email,
             "sender_domain": self.sender_domain,

@@ -69,4 +69,5 @@ def _decision(
         source=source,
         signals=signals,
         used_llm=used_llm,
+        model=config.LLM_MODEL if used_llm else None,
     )
