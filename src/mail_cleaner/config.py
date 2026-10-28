@@ -140,6 +140,19 @@ def load_protected_senders() -> set[str]:
     }
 
 
+def load_quarantine_senders() -> set[str]:
+    """User-maintained force-quarantine list (sender-level rules): one address
+    or domain per line. Protected checks still win over this list."""
+    path = DATA_DIR / "quarantine_senders.txt"
+    if not path.exists():
+        return set()
+    return {
+        line.strip().lower()
+        for line in path.read_text().splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+
+
 def add_protected_senders(senders: set[str]) -> set[str]:
     """Append senders not already listed; returns the ones actually added."""
     new = {s.lower() for s in senders} - load_protected_senders()

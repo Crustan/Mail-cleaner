@@ -58,7 +58,7 @@ Daily cleanup on a Mac — run the inbox sweep on a schedule (crontab -e):
 0 7,19 * * * cd /path/to/Mail-cleaner && .venv/bin/mail-cleaner shadow --scope inbox --days 2 && .venv/bin/mail-cleaner apply --yes >> data/cron.log 2>&1
 ```
 
-Add senders/domains to always keep in `data/protected_senders.txt` (one per line). Override notification expiry in `data/notification_senders.txt` (`domain days` per line, `0` disables; defaults in `config.py`).
+Sender-level rules, one address or domain per line: always keep in `data/protected_senders.txt`; always quarantine in `data/quarantine_senders.txt` (protected wins on conflict). Override notification expiry in `data/notification_senders.txt` (`domain days` per line, `0` disables; defaults in `config.py`). Repeat sweeps skip already-quarantined mail.
 
 ## What to measure in the week
 

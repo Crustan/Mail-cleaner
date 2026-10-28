@@ -44,10 +44,12 @@ def get_service():
 
 # Gmail search per scope. Spam and trash are excluded everywhere: Gmail already
 # handles spam, and acting on it would double-handle (seen leaking through in:all).
+# Already-quarantined mail is excluded too, so repeat sweeps don't redo work.
+_EXCLUDE = "-in:spam -in:trash -label:cleanup-ads -label:cleanup-expired"
 SCOPE_QUERIES = {
-    "inbox": "in:inbox",
-    "archive": "in:all -in:inbox -in:spam -in:trash",
-    "all": "in:all -in:spam -in:trash",
+    "inbox": f"in:inbox {_EXCLUDE}",
+    "archive": f"in:all -in:inbox {_EXCLUDE}",
+    "all": f"in:all {_EXCLUDE}",
 }
 EXCLUDED_LABELS = {"SPAM", "TRASH"}
 
