@@ -34,9 +34,11 @@ mail-cleaner report               # per-sender totals, verdict split, LLM share,
 Scopes: `--scope inbox` (default), `--scope archive` (All Mail minus inbox — the backlog), `--scope all`. A backlog sweep:
 
 ```bash
-MAIL_CLEANER_NO_LLM=1 mail-cleaner shadow --scope archive --days 1825 --limit 2000
+caffeinate -i mail-cleaner shadow --scope archive --days 3650   # caffeinate keeps the Mac awake (macOS)
 mail-cleaner report
 ```
+
+Sweeps are interruptible: every decision is persisted as it happens, and rerunning the same command resumes — already-classified mail is skipped at list speed (no metadata fetch, no LLM; failed LLM calls are retried). `--fresh` clears the log and starts over. A connection lost mid-run (e.g. the machine slept) reconnects automatically; if it still fails, progress is saved and the printed message says to rerun.
 
 Acting on verdicts (phase 2 — after reviewing the report; first re-auth for the modify scope with `rm token.json && mail-cleaner auth`):
 

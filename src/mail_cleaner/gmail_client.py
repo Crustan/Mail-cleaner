@@ -1,8 +1,10 @@
-"""Gmail access, read-only. OAuth installed-app flow for personal testing mode."""
+"""Gmail access. OAuth installed-app flow for personal testing mode."""
 
 from __future__ import annotations
 
 import email.utils
+import sys
+import time
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -54,21 +56,42 @@ SCOPE_QUERIES = {
 EXCLUDED_LABELS = {"SPAM", "TRASH"}
 
 
-def iter_messages(service, days: int, scope: str = "inbox", limit: int | None = None):
-    """Yield EmailMeta for mail in `scope` from the last `days` days, metadata only."""
+# Errors the Google client doesn't recover from by itself — typically a stale
+# connection after the machine slept. Rebuild the service and go on.
+_CONNECTION_ERRORS = (ConnectionError, TimeoutError, OSError)
+
+
+def iter_messages(
+    service,
+    days: int,
+    scope: str = "inbox",
+    limit: int | None = None,
+    skip_ids: set[str] | None = None,
+):
+    """Yield EmailMeta for mail in `scope` from the last `days` days, metadata only.
+
+    Ids in `skip_ids` are skipped before any metadata fetch, so resuming an
+    interrupted sweep fast-forwards through classified mail at list speed.
+    Transient failures retry with a rebuilt connection instead of crashing.
+    """
     query = f"{SCOPE_QUERIES[scope]} newer_than:{days}d"
+    skip_ids = skip_ids or set()
     page_token = None
     yielded = 0
     while True:
-        result = (
-            service.users()
+        result, service = _with_recovery(
+            service,
+            lambda svc: svc.users()
             .messages()
             .list(userId="me", q=query, pageToken=page_token, maxResults=100)
-            .execute()
+            .execute(num_retries=5),
         )
         for ref in result.get("messages", []):
-            msg = (
-                service.users()
+            if ref["id"] in skip_ids:
+                continue
+            msg, service = _with_recovery(
+                service,
+                lambda svc: svc.users()
                 .messages()
                 .get(
                     userId="me",
@@ -76,7 +99,7 @@ def iter_messages(service, days: int, scope: str = "inbox", limit: int | None = 
                     format="metadata",
                     metadataHeaders=METADATA_HEADERS,
                 )
-                .execute()
+                .execute(num_retries=5),
             )
             meta = _to_meta(msg)
             if EXCLUDED_LABELS.intersection(meta.labels):
@@ -88,6 +111,23 @@ def iter_messages(service, days: int, scope: str = "inbox", limit: int | None = 
         page_token = result.get("nextPageToken")
         if not page_token:
             return
+
+
+def _with_recovery(service, call, attempts: int = 3):
+    """Run call(service); on a connection-level error, rebuild the service and
+    retry. Returns (result, service) so the caller keeps the fresh connection."""
+    for attempt in range(attempts):
+        try:
+            return call(service), service
+        except _CONNECTION_ERRORS as exc:
+            if attempt == attempts - 1:
+                raise
+            print(
+                f"Connection lost ({type(exc).__name__}); reconnecting...",
+                file=sys.stderr,
+            )
+            time.sleep(5 * (attempt + 1))
+            service = get_service()
 
 
 def _to_meta(msg: dict) -> EmailMeta:
