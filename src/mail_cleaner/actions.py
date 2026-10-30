@@ -54,8 +54,23 @@ def ensure_labels(service) -> dict[str, str]:
     return ids
 
 
-def plan(rows: list[dict], verdicts: set[str], max_actions: int | None) -> list[dict]:
-    actionable = [row for row in rows if row["verdict"] in verdicts]
+def actioned_ids() -> set[str]:
+    """Message ids any previous apply run already acted on."""
+    return {entry["message_id"] for entry in _load_entries()}
+
+
+def plan(
+    rows: list[dict],
+    verdicts: set[str],
+    max_actions: int | None,
+    exclude: set[str] | None = None,
+) -> list[dict]:
+    exclude = exclude or set()
+    actionable = [
+        row
+        for row in rows
+        if row["verdict"] in verdicts and row["message_id"] not in exclude
+    ]
     return actionable[:max_actions] if max_actions else actionable
 
 
@@ -125,12 +140,13 @@ def describe_plan(planned: list[dict], trash: bool) -> str:
     return "\n".join(lines)
 
 
-def apply(service, planned: list[dict], trash: bool) -> str:
-    """Execute the plan. Returns the run id for undo."""
+def apply(service, planned: list[dict], trash: bool) -> tuple[str, Counter]:
+    """Execute the plan. Returns (run id for undo, per-outcome counts)."""
     label_ids = ensure_labels(service)
     run_id = uuid.uuid4().hex[:8]
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+    outcomes: Counter = Counter()
     done = 0
     with config.ACTIONS_LOG.open("a") as log:
         for row in planned:
@@ -160,6 +176,7 @@ def apply(service, planned: list[dict], trash: bool) -> str:
                     print(REAUTH_HINT, file=sys.stderr)
                     break
                 if exc.resp.status == 404:
+                    outcomes[f"{row['verdict']}:missing"] += 1
                     continue  # message gone since the shadow run
                 raise
             log.write(
@@ -175,11 +192,12 @@ def apply(service, planned: list[dict], trash: bool) -> str:
                 )
                 + "\n"
             )
+            outcomes[f"{row['verdict']}:done"] += 1
             done += 1
             if done % 50 == 0:
                 print(f"...{done} applied", file=sys.stderr)
 
-    return run_id if done else ""
+    return (run_id if done else ""), outcomes
 
 
 def _load_entries(run_id: str | None = None, sender: str | None = None) -> list[dict]:
