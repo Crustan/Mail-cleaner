@@ -57,6 +57,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Instead of shadow verdicts: trash mail already Cleanup-labeled "
         "(by a Gmail filter) that you have archived out of the inbox",
     )
+    apply_cmd.add_argument(
+        "--redo",
+        action="store_true",
+        help="Also act on messages a previous apply run already handled "
+        "(skipped by default, e.g. after an undo)",
+    )
 
     undo_cmd = sub.add_parser("undo", help="Reverse an apply run")
     undo_cmd.add_argument("--run", required=True, help="Run id printed by apply")
@@ -101,19 +107,31 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "apply":
         if args.labeled:
+            # No actioned-id exclusion here: label-now-trash-later is the whole
+            # point of this path, and its query already excludes trashed mail.
+            exclude: set[str] = set()
             service = gmail_client.get_service()
-            planned = actions.plan(
-                actions.labeled_archived(service), actions.ACTIONABLE_VERDICTS, args.max
-            )
+            rows = actions.labeled_archived(service)
             trash = True  # labeled + archived = read and done; removal is the point
         else:
+            exclude = set() if args.redo else actions.actioned_ids()
             service = None
-            verdicts = set(args.verdict) if args.verdict else actions.ACTIONABLE_VERDICTS
-            planned = actions.plan(report.load_log(), verdicts, args.max)
+            rows = report.load_log()
             trash = args.trash
+        verdicts = (
+            set(args.verdict)
+            if not args.labeled and args.verdict
+            else actions.ACTIONABLE_VERDICTS
+        )
+        planned = actions.plan(rows, verdicts, args.max, exclude=exclude)
+        skipped = len(actions.plan(rows, verdicts, None)) - len(
+            actions.plan(rows, verdicts, None, exclude=exclude)
+        )
+        if skipped:
+            print(f"Skipping {skipped} messages already handled by earlier runs (--redo includes them).")
         if not planned:
             print(
-                "Nothing to act on."
+                "Nothing new to act on."
                 + ("" if args.labeled else " Run a shadow sweep first.")
             )
             return 0
@@ -121,7 +139,9 @@ def main(argv: list[str] | None = None) -> int:
         if not args.yes:
             print("\nDry run — rerun with --yes to execute.")
             return 0
-        run_id = actions.apply(service or gmail_client.get_service(), planned, trash)
+        run_id, outcomes = actions.apply(service or gmail_client.get_service(), planned, trash)
+        for key in sorted(outcomes):
+            print(f"  {key}: {outcomes[key]}")
         if run_id:
             print(f"Applied. Undo with: mail-cleaner undo --run {run_id}")
         return 0
