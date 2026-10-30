@@ -54,11 +54,15 @@ mail-cleaner filters --yes              # create the filters (label Cleanup/Ads 
 
 Native filters run inside Gmail at delivery — zero API/LLM cost, works when the tool is off. Only consistently-ad senders qualify (≥ 3 ad verdicts, zero keep/protected); expiry can't be a filter since it's age-based. The `filters` command needs the `gmail.settings.basic` scope — re-consent with `rm token.json && mail-cleaner auth` after upgrading.
 
+Filters are **label-only** (inbox-zero flow): the mail still lands in the inbox, pre-labeled. Read it, archive it as usual — then `mail-cleaner apply --labeled --yes` trashes everything that is Cleanup-labeled and no longer in the inbox. The label is the decision; your archiving is the trigger. No classification or LLM involved, and it's logged/undoable like any apply run.
+
 Daily cleanup on a Mac — run the inbox sweep on a schedule (crontab -e):
 
 ```cron
-0 7,19 * * * cd /path/to/Mail-cleaner && .venv/bin/mail-cleaner shadow --scope inbox --days 2 && .venv/bin/mail-cleaner apply --yes >> data/cron.log 2>&1
+0 7,19 * * * cd /path/to/Mail-cleaner && .venv/bin/mail-cleaner shadow --scope archive --days 7 && .venv/bin/mail-cleaner apply --trash --yes && .venv/bin/mail-cleaner apply --labeled --yes >> data/cron.log 2>&1
 ```
+
+(Archive-scope for inbox-zero users: mail stays in the inbox until you archive it; the sweep then classifies and removes what you're done with, and `--labeled` picks up filter-labeled mail you've archived.)
 
 Sender-level rules, one address or domain per line: always keep in `data/protected_senders.txt`; always quarantine in `data/quarantine_senders.txt` (protected wins on conflict). Override notification expiry in `data/notification_senders.txt` (`domain days` per line, `0` disables; defaults in `config.py`). Repeat sweeps skip already-quarantined mail.
 

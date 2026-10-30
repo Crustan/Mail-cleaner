@@ -59,6 +59,59 @@ def plan(rows: list[dict], verdicts: set[str], max_actions: int | None) -> list[
     return actionable[:max_actions] if max_actions else actionable
 
 
+def labeled_archived(service) -> list[dict]:
+    """Mail carrying a Cleanup label that is no longer in the inbox (and not in
+    trash): labeled at delivery by a Gmail filter, then read and archived by the
+    user — archiving is the removal trigger. Rows are apply()-compatible."""
+    import email.utils
+
+    label_ids = ensure_labels(service)
+    rows = []
+    for verdict, name in QUARANTINE_LABELS.items():
+        page_token = None
+        while True:
+            result = (
+                service.users()
+                .messages()
+                .list(
+                    userId="me",
+                    labelIds=[label_ids[name]],
+                    q="-in:inbox -in:trash",
+                    pageToken=page_token,
+                    maxResults=100,
+                )
+                .execute(num_retries=5)
+            )
+            for ref in result.get("messages", []):
+                msg = (
+                    service.users()
+                    .messages()
+                    .get(
+                        userId="me",
+                        id=ref["id"],
+                        format="metadata",
+                        metadataHeaders=["From"],
+                    )
+                    .execute(num_retries=5)
+                )
+                headers = {
+                    h["name"].lower(): h["value"]
+                    for h in msg.get("payload", {}).get("headers", [])
+                }
+                _, sender = email.utils.parseaddr(headers.get("from", ""))
+                rows.append(
+                    {
+                        "message_id": ref["id"],
+                        "sender_email": sender.lower(),
+                        "verdict": verdict,
+                    }
+                )
+            page_token = result.get("nextPageToken")
+            if not page_token:
+                break
+    return rows
+
+
 def describe_plan(planned: list[dict], trash: bool) -> str:
     action = "trash" if trash else "label + keep out of inbox"
     per_sender: Counter = Counter(

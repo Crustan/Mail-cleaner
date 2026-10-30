@@ -51,6 +51,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     apply_cmd.add_argument("--max", type=int, default=None, help="Cap actions this run")
     apply_cmd.add_argument("--yes", action="store_true", help="Execute (default: dry run)")
+    apply_cmd.add_argument(
+        "--labeled",
+        action="store_true",
+        help="Instead of shadow verdicts: trash mail already Cleanup-labeled "
+        "(by a Gmail filter) that you have archived out of the inbox",
+    )
 
     undo_cmd = sub.add_parser("undo", help="Reverse an apply run")
     undo_cmd.add_argument("--run", required=True, help="Run id printed by apply")
@@ -94,16 +100,28 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "apply":
-        verdicts = set(args.verdict) if args.verdict else actions.ACTIONABLE_VERDICTS
-        planned = actions.plan(report.load_log(), verdicts, args.max)
+        if args.labeled:
+            service = gmail_client.get_service()
+            planned = actions.plan(
+                actions.labeled_archived(service), actions.ACTIONABLE_VERDICTS, args.max
+            )
+            trash = True  # labeled + archived = read and done; removal is the point
+        else:
+            service = None
+            verdicts = set(args.verdict) if args.verdict else actions.ACTIONABLE_VERDICTS
+            planned = actions.plan(report.load_log(), verdicts, args.max)
+            trash = args.trash
         if not planned:
-            print("Nothing to act on. Run a shadow sweep first.")
+            print(
+                "Nothing to act on."
+                + ("" if args.labeled else " Run a shadow sweep first.")
+            )
             return 0
-        print(actions.describe_plan(planned, args.trash))
+        print(actions.describe_plan(planned, trash))
         if not args.yes:
             print("\nDry run — rerun with --yes to execute.")
             return 0
-        run_id = actions.apply(gmail_client.get_service(), planned, args.trash)
+        run_id = actions.apply(service or gmail_client.get_service(), planned, trash)
         if run_id:
             print(f"Applied. Undo with: mail-cleaner undo --run {run_id}")
         return 0
