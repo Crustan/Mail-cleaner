@@ -27,6 +27,11 @@ def main(argv: list[str] | None = None) -> int:
         default="inbox",
         help="inbox (default), archive (All Mail minus inbox), or all",
     )
+    shadow.add_argument(
+        "--fresh",
+        action="store_true",
+        help="Start over: clear the shadow log instead of resuming past it",
+    )
 
     sub.add_parser("report", help="Per-sender report from the shadow log")
 
@@ -46,6 +51,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     apply_cmd.add_argument("--max", type=int, default=None, help="Cap actions this run")
     apply_cmd.add_argument("--yes", action="store_true", help="Execute (default: dry run)")
+    apply_cmd.add_argument(
+        "--labeled",
+        action="store_true",
+        help="Instead of shadow verdicts: trash mail already Cleanup-labeled "
+        "(by a Gmail filter) that you have archived out of the inbox",
+    )
 
     undo_cmd = sub.add_parser("undo", help="Reverse an apply run")
     undo_cmd.add_argument("--run", required=True, help="Run id printed by apply")
@@ -82,23 +93,35 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "shadow":
-        return _run_shadow(args.days, args.scope, args.limit)
+        return _run_shadow(args.days, args.scope, args.limit, args.fresh)
 
     if args.command == "report":
         print(report.render(report.load_log()))
         return 0
 
     if args.command == "apply":
-        verdicts = set(args.verdict) if args.verdict else actions.ACTIONABLE_VERDICTS
-        planned = actions.plan(report.load_log(), verdicts, args.max)
+        if args.labeled:
+            service = gmail_client.get_service()
+            planned = actions.plan(
+                actions.labeled_archived(service), actions.ACTIONABLE_VERDICTS, args.max
+            )
+            trash = True  # labeled + archived = read and done; removal is the point
+        else:
+            service = None
+            verdicts = set(args.verdict) if args.verdict else actions.ACTIONABLE_VERDICTS
+            planned = actions.plan(report.load_log(), verdicts, args.max)
+            trash = args.trash
         if not planned:
-            print("Nothing to act on. Run a shadow sweep first.")
+            print(
+                "Nothing to act on."
+                + ("" if args.labeled else " Run a shadow sweep first.")
+            )
             return 0
-        print(actions.describe_plan(planned, args.trash))
+        print(actions.describe_plan(planned, trash))
         if not args.yes:
             print("\nDry run — rerun with --yes to execute.")
             return 0
-        run_id = actions.apply(gmail_client.get_service(), planned, args.trash)
+        run_id = actions.apply(service or gmail_client.get_service(), planned, trash)
         if run_id:
             print(f"Applied. Undo with: mail-cleaner undo --run {run_id}")
         return 0
@@ -143,19 +166,39 @@ def main(argv: list[str] | None = None) -> int:
     return 1
 
 
-def _run_shadow(days: int, scope: str, limit: int | None) -> int:
+def _run_shadow(days: int, scope: str, limit: int | None, fresh: bool = False) -> int:
     service = gmail_client.get_service()
     protected_senders = config.load_protected_senders()
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+    if fresh:
+        config.SHADOW_LOG.unlink(missing_ok=True)
+        skip_ids: set[str] = set()
+    else:
+        skip_ids = report.resume_ids(report.load_log())
+        if skip_ids:
+            print(f"Resuming: {len(skip_ids)} already classified, skipping.", file=sys.stderr)
+
     count = 0
-    with config.SHADOW_LOG.open("a") as log:
-        for meta in gmail_client.iter_messages(service, days=days, scope=scope, limit=limit):
-            decision = pipeline.decide(meta, protected_senders)
-            log.write(json.dumps(decision.to_log(), ensure_ascii=False) + "\n")
-            count += 1
-            if count % 50 == 0:
-                print(f"...{count} classified", file=sys.stderr)
+    try:
+        with config.SHADOW_LOG.open("a") as log:
+            for meta in gmail_client.iter_messages(
+                service, days=days, scope=scope, limit=limit, skip_ids=skip_ids
+            ):
+                decision = pipeline.decide(meta, protected_senders)
+                log.write(json.dumps(decision.to_log(), ensure_ascii=False) + "\n")
+                count += 1
+                if count % 50 == 0:
+                    print(f"...{count} classified", file=sys.stderr)
+    except KeyboardInterrupt:
+        print(f"\nInterrupted after {count} messages — progress saved; rerun to resume.")
+        return 130
+    except Exception as exc:  # noqa: BLE001 — progress is safe, say so instead of a traceback
+        print(
+            f"\nFailed after {count} messages ({type(exc).__name__}: {exc}) — "
+            "progress saved; rerun the same command to resume."
+        )
+        return 1
 
     print(f"Shadow run done: {count} messages classified, 0 actions taken.")
     print(f"Log: {config.SHADOW_LOG}. Next: mail-cleaner report")

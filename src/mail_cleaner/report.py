@@ -20,6 +20,16 @@ def load_log() -> list[dict]:
     return list(latest.values())
 
 
+def resume_ids(rows: list[dict]) -> set[str]:
+    """Message ids a resumed sweep may skip: everything already decided, except
+    rows whose LLM call failed — those deserve a retry."""
+    return {
+        row["message_id"]
+        for row in rows
+        if not any("llm-error" in signal for signal in row.get("signals", []))
+    }
+
+
 def render(rows: list[dict]) -> str:
     if not rows:
         return "No shadow log yet. Run: mail-cleaner shadow --days 7"

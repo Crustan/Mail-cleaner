@@ -40,7 +40,11 @@ def existing_filter_senders(service) -> set[str]:
 
 
 def create_filters(service, senders: list[str]) -> int:
-    """Create one filter per sender: label Cleanup/Ads + skip the inbox."""
+    """Create one filter per sender: label Cleanup/Ads, stay in the inbox.
+
+    Label-only by design (inbox-zero flow): the mail arrives normally; once the
+    user reads and archives it, `apply --labeled` trashes it — the label is the
+    decision, archiving is the trigger."""
     label_id = actions.ensure_labels(service)[actions.QUARANTINE_LABELS["ad"]]
     created = 0
     for sender in senders:
@@ -48,11 +52,8 @@ def create_filters(service, senders: list[str]) -> int:
             userId="me",
             body={
                 "criteria": {"from": sender},
-                "action": {
-                    "addLabelIds": [label_id],
-                    "removeLabelIds": ["INBOX"],
-                },
+                "action": {"addLabelIds": [label_id]},
             },
-        ).execute()
+        ).execute(num_retries=5)
         created += 1
     return created

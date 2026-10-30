@@ -30,7 +30,7 @@ def ensure_labels(service) -> dict[str, str]:
     """Create the Cleanup labels if missing; return {label_name: label_id}."""
     existing = {
         label["name"]: label["id"]
-        for label in service.users().labels().list(userId="me").execute().get("labels", [])
+        for label in service.users().labels().list(userId="me").execute(num_retries=5).get("labels", [])
     }
     ids = {}
     for name in QUARANTINE_LABELS.values():
@@ -48,7 +48,7 @@ def ensure_labels(service) -> dict[str, str]:
                         "messageListVisibility": "show",
                     },
                 )
-                .execute()
+                .execute(num_retries=5)
             )
             ids[name] = created["id"]
     return ids
@@ -57,6 +57,59 @@ def ensure_labels(service) -> dict[str, str]:
 def plan(rows: list[dict], verdicts: set[str], max_actions: int | None) -> list[dict]:
     actionable = [row for row in rows if row["verdict"] in verdicts]
     return actionable[:max_actions] if max_actions else actionable
+
+
+def labeled_archived(service) -> list[dict]:
+    """Mail carrying a Cleanup label that is no longer in the inbox (and not in
+    trash): labeled at delivery by a Gmail filter, then read and archived by the
+    user — archiving is the removal trigger. Rows are apply()-compatible."""
+    import email.utils
+
+    label_ids = ensure_labels(service)
+    rows = []
+    for verdict, name in QUARANTINE_LABELS.items():
+        page_token = None
+        while True:
+            result = (
+                service.users()
+                .messages()
+                .list(
+                    userId="me",
+                    labelIds=[label_ids[name]],
+                    q="-in:inbox -in:trash",
+                    pageToken=page_token,
+                    maxResults=100,
+                )
+                .execute(num_retries=5)
+            )
+            for ref in result.get("messages", []):
+                msg = (
+                    service.users()
+                    .messages()
+                    .get(
+                        userId="me",
+                        id=ref["id"],
+                        format="metadata",
+                        metadataHeaders=["From"],
+                    )
+                    .execute(num_retries=5)
+                )
+                headers = {
+                    h["name"].lower(): h["value"]
+                    for h in msg.get("payload", {}).get("headers", [])
+                }
+                _, sender = email.utils.parseaddr(headers.get("from", ""))
+                rows.append(
+                    {
+                        "message_id": ref["id"],
+                        "sender_email": sender.lower(),
+                        "verdict": verdict,
+                    }
+                )
+            page_token = result.get("nextPageToken")
+            if not page_token:
+                break
+    return rows
 
 
 def describe_plan(planned: list[dict], trash: bool) -> str:
@@ -88,11 +141,11 @@ def apply(service, planned: list[dict], trash: bool) -> str:
                     service.users()
                     .messages()
                     .get(userId="me", id=msg_id, format="minimal")
-                    .execute()
+                    .execute(num_retries=5)
                 )
                 had_inbox = "INBOX" in before.get("labelIds", [])
                 if trash:
-                    service.users().messages().trash(userId="me", id=msg_id).execute()
+                    service.users().messages().trash(userId="me", id=msg_id).execute(num_retries=5)
                 else:
                     service.users().messages().modify(
                         userId="me",
@@ -101,7 +154,7 @@ def apply(service, planned: list[dict], trash: bool) -> str:
                             "addLabelIds": [label_ids[label_name]],
                             "removeLabelIds": ["INBOX"] if had_inbox else [],
                         },
-                    ).execute()
+                    ).execute(num_retries=5)
             except HttpError as exc:
                 if exc.resp.status == 403:
                     print(REAUTH_HINT, file=sys.stderr)
@@ -148,7 +201,7 @@ def _reverse_entry(service, entry: dict, label_ids: dict[str, str]) -> bool:
     msg_id = entry["message_id"]
     try:
         if entry["action"] == "trash":
-            service.users().messages().untrash(userId="me", id=msg_id).execute()
+            service.users().messages().untrash(userId="me", id=msg_id).execute(num_retries=5)
         body = {
             "addLabelIds": ["INBOX"] if entry["had_inbox"] else [],
             "removeLabelIds": [label_ids[entry["label"]]]
@@ -156,7 +209,7 @@ def _reverse_entry(service, entry: dict, label_ids: dict[str, str]) -> bool:
             else [],
         }
         if body["addLabelIds"] or body["removeLabelIds"]:
-            service.users().messages().modify(userId="me", id=msg_id, body=body).execute()
+            service.users().messages().modify(userId="me", id=msg_id, body=body).execute(num_retries=5)
     except HttpError as exc:
         if exc.resp.status == 404:
             return False
@@ -190,13 +243,13 @@ def _strip_quarantine_labels(service, sender: str, label_ids: dict[str, str]) ->
                     q=f"from:{sender}",
                     pageToken=page_token,
                 )
-                .execute()
+                .execute(num_retries=5)
             )
             ids = [m["id"] for m in result.get("messages", [])]
             if ids:
                 service.users().messages().batchModify(
                     userId="me", body={"ids": ids, "removeLabelIds": [label_id]}
-                ).execute()
+                ).execute(num_retries=5)
                 removed += len(ids)
             page_token = result.get("nextPageToken")
             if not page_token:
