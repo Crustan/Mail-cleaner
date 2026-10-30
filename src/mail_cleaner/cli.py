@@ -106,12 +106,15 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "apply":
-        exclude = set() if args.redo else actions.actioned_ids()
         if args.labeled:
+            # No actioned-id exclusion here: label-now-trash-later is the whole
+            # point of this path, and its query already excludes trashed mail.
+            exclude: set[str] = set()
             service = gmail_client.get_service()
             rows = actions.labeled_archived(service)
             trash = True  # labeled + archived = read and done; removal is the point
         else:
+            exclude = set() if args.redo else actions.actioned_ids()
             service = None
             rows = report.load_log()
             trash = args.trash
