@@ -29,6 +29,7 @@ app = typer.Typer(
     "quarantine reviewed mail, teach it per sender. Run without a command for status.",
     invoke_without_command=True,
     no_args_is_help=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 console = Console()
 err = Console(stderr=True)
@@ -101,6 +102,11 @@ def _status() -> None:
     else:
         next_cmd = "mail-cleaner scan --scope archive --days 7"
     console.print(f"\nNext: [bold cyan]{next_cmd}[/bold cyan]")
+    console.print(
+        "\n[dim]Workflow: scan → report → triage → scan → apply --trash --yes → filters, repeat.\n"
+        "The log is the tool's memory (resume, dedup, triage) — never delete it; "
+        "scan --fresh starts over.[/dim]"
+    )
 
 
 @app.command()
