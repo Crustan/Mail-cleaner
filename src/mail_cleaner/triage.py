@@ -124,7 +124,7 @@ def run_interactive(rows: list[dict], min_count: int = 3, use_llm: bool = True) 
             )
             progress.update(task, completed=len(queue))
 
-    counts = {"ad": 0, "notification": 0, "protect": 0, "skip": 0}
+    counts = {"ad": 0, "notification": 0, "protect": 0, "skip": 0, "accepted": 0}
     print("\nKeys: [a]d  [e]xpire 14d  [E]xpire custom  [p]rotect  [s]kip  [q]uit  ⏎=accept suggestion\n")
     for i, entry in enumerate(queue, 1):
         sender, domain = entry["sender"], entry["domain"]
@@ -148,23 +148,31 @@ def run_interactive(rows: list[dict], min_count: int = 3, use_llm: bool = True) 
         except (EOFError, KeyboardInterrupt):
             print()
             break
+        accepted = ""
         if choice == "" and hint:
             choice = {"ad": "a", "notification": "e", "keep": "s"}[hint["category"]]
+            counts["accepted"] += 1
+            accepted = " (accepted suggestion)"
         if choice == "q":
             break
         elif choice == "a":
             config.add_quarantine_senders({sender})
             counts["ad"] += 1
+            print(f"    → ad{accepted}: {sender} added to the quarantine list")
         elif choice in ("e", "E"):
             days = hint.get("days", 14) if (hint and choice == "e") else 14
             if choice == "E":
                 days = int(input("  days until expired: ").strip() or "14")
             config.add_notification_sender(domain, days)
-            print(f"    note: expiry applies to the whole domain {domain}")
             counts["notification"] += 1
+            print(
+                f"    → notification{accepted}: whole domain {domain} expires after {days}d"
+            )
         elif choice == "p":
             config.add_protected_senders({sender})
             counts["protect"] += 1
+            print(f"    → protected: {sender} never touched again")
         else:
             counts["skip"] += 1
+            print(f"    → skipped{accepted}: no rule saved, reappears next session")
     return counts
