@@ -133,8 +133,15 @@ def run_interactive(rows: list[dict], min_count: int = 3, use_llm: bool = True) 
             print(f"    · {subject[:70]}")
         hint = suggestions.get(sender)
         if hint:
-            days = f" {hint.get('days', 14)}d" if hint["category"] == "notification" else ""
-            print(f"    suggestion: {hint['category']}{days} — {hint.get('reason', '')[:70]}")
+            key, label = {
+                "ad": ("a", "ad"),
+                "notification": ("e", f"expire {hint.get('days', 14)}d"),
+                "keep": ("s", "keep (skip)"),
+            }[hint["category"]]
+            reason = hint.get("reason", "")
+            if len(reason) > 90:
+                reason = reason[:89] + "…"
+            print(f"    suggestion: ⏎ = [{key}] {label} — {reason}")
 
         try:
             choice = input("  > ").strip()
