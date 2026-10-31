@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 
-from mail_cleaner import actions, config, filters, gmail_client, pipeline, report
+from mail_cleaner import actions, config, filters, gmail_client, pipeline, report, triage
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -84,6 +84,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     filters_cmd.add_argument("--yes", action="store_true", help="Create the filters (default: dry run)")
 
+    triage_cmd = sub.add_parser(
+        "triage", help="Interactive sender triage of keep mail (one keypress per sender)"
+    )
+    triage_cmd.add_argument(
+        "--min", type=int, default=3, help="Only senders with at least this many keeps (default 3)"
+    )
+    triage_cmd.add_argument(
+        "--no-llm", action="store_true", help="Skip LLM suggestions (plain prompts)"
+    )
+
     args = parser.parse_args(argv)
 
     if args.command == "auth":
@@ -149,6 +159,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "undo":
         undone = actions.undo(gmail_client.get_service(), args.run)
         print(f"Undid {undone} actions from run {args.run}.")
+        return 0
+
+    if args.command == "triage":
+        counts = triage.run_interactive(
+            report.load_log(), min_count=args.min, use_llm=not args.no_llm
+        )
+        if counts:
+            print(
+                f"\nTriaged — ad: {counts['ad']}, notification: {counts['notification']}, "
+                f"protected: {counts['protect']}, skipped: {counts['skip']}."
+            )
+            print("Next: mail-cleaner shadow --scope archive --days 5000 && mail-cleaner apply --trash --yes")
         return 0
 
     if args.command == "filters":

@@ -153,6 +153,25 @@ def load_quarantine_senders() -> set[str]:
     }
 
 
+def add_quarantine_senders(senders: set[str]) -> set[str]:
+    """Append senders not already on the force-quarantine list."""
+    new = {s.lower() for s in senders} - load_quarantine_senders()
+    if new:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        with (DATA_DIR / "quarantine_senders.txt").open("a") as f:
+            for sender in sorted(new):
+                f.write(sender + "\n")
+    return new
+
+
+def add_notification_sender(domain: str, days: int) -> None:
+    """Append a notification-expiry override and refresh the cached list."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    with (DATA_DIR / "notification_senders.txt").open("a") as f:
+        f.write(f"{domain.lower()} {days}\n")
+    load_notification_senders.cache_clear()
+
+
 def add_protected_senders(senders: set[str]) -> set[str]:
     """Append senders not already listed; returns the ones actually added."""
     new = {s.lower() for s in senders} - load_protected_senders()

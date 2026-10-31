@@ -64,6 +64,8 @@ Daily cleanup on a Mac — run the inbox sweep on a schedule (crontab -e):
 
 (Archive-scope for inbox-zero users: mail stays in the inbox until you archive it; the sweep then classifies and removes what you're done with, and `--labeled` picks up filter-labeled mail you've archived.)
 
+Triage the remaining keep mail interactively: `mail-cleaner triage` walks keep senders biggest-first with LLM-suggested categories — one keypress per sender files it as ad (quarantine list), notification (domain expiry), or protected; Enter accepts the suggestion, decisions are saved immediately, and the next sweep re-evaluates affected mail. `--min N` skips small senders, `--no-llm` for plain prompts.
+
 Sender-level rules, one address or domain per line: always keep in `data/protected_senders.txt`; always quarantine in `data/quarantine_senders.txt` (protected wins on conflict). Override notification expiry in `data/notification_senders.txt` (`domain days` per line, `0` disables; defaults in `config.py`). Repeat sweeps skip already-quarantined mail.
 
 ## What to measure in the week
