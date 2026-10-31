@@ -103,7 +103,7 @@ def _status() -> None:
         next_cmd = "mail-cleaner scan --scope archive --days 7"
     console.print(f"\nNext: [bold cyan]{next_cmd}[/bold cyan]")
     console.print(
-        "\n[dim]Workflow: scan → report → triage → scan → apply --trash --yes → filters, repeat.\n"
+        "\n[dim]Workflow: scan → report → triage → scan → apply --trash --execute → filters, repeat.\n"
         "The log is the tool's memory (resume, dedup, triage) — never delete it; "
         "scan --fresh starts over.[/dim]"
     )
@@ -188,7 +188,9 @@ def report() -> None:
 
 @app.command("apply")
 def apply_cmd(
-    yes: bool = typer.Option(False, "--yes", help="Execute (default: dry run)."),
+    execute: bool = typer.Option(
+        False, "--execute", "--yes", help="Execute the plan (default: preview only; --yes is an alias)."
+    ),
     trash: bool = typer.Option(
         False, "--trash", help="Move to Gmail trash (auto-purged after 30 days) instead of labeling."
     ),
@@ -205,7 +207,7 @@ def apply_cmd(
         None, "--verdict", help="Verdicts to act on: ad, expired (default both)."
     ),
 ) -> None:
-    """Act on classified mail. Dry run unless --yes; every run is undoable."""
+    """Act on classified mail. Dry run unless --execute; every run is undoable."""
     if labeled:
         # No actioned-id exclusion: label-now-trash-later is this path's point,
         # and its query already excludes trashed mail.
@@ -232,8 +234,8 @@ def apply_cmd(
         console.print("Nothing new to act on." + ("" if labeled else " Run a scan first."))
         raise typer.Exit()
     console.print(actions.describe_plan(planned, trash), highlight=False)
-    if not yes:
-        console.print("\nDry run — rerun with [bold]--yes[/bold] to execute.")
+    if not execute:
+        console.print("\nPreview only — rerun with [bold]--execute[/bold] to act on it.")
         raise typer.Exit()
 
     progress = Progress(
@@ -286,7 +288,9 @@ def filters(
     min_ads: int | None = typer.Option(
         None, "--min", help=f"Min ad verdicts per sender (default {config.FILTER_MIN_ADS})."
     ),
-    yes: bool = typer.Option(False, "--yes", help="Create the filters (default: dry run)."),
+    execute: bool = typer.Option(
+        False, "--execute", "--yes", help="Create the filters (default: preview only; --yes is an alias)."
+    ),
 ) -> None:
     """Create native Gmail filters (label-only) for consistently-ad senders."""
     cands = filters_mod.candidates(report_mod.load_log(), min_ads)
@@ -301,9 +305,9 @@ def filters(
         console.print(f"  {n:>4}  {sender}")
     if not new:
         raise typer.Exit()
-    if not yes:
+    if not execute:
         console.print(
-            "\nDry run — rerun with [bold]--yes[/bold] to create Gmail filters "
+            "\nPreview only — rerun with [bold]--execute[/bold] to create Gmail filters "
             "(label Cleanup/Ads; mail stays in the inbox)."
         )
         raise typer.Exit()
@@ -330,7 +334,7 @@ def triage(
         )
         console.print(
             "Next: [bold cyan]mail-cleaner scan --scope archive --days 5000 "
-            "&& mail-cleaner apply --trash --yes[/bold cyan]"
+            "&& mail-cleaner apply --trash --execute[/bold cyan]"
         )
 
 
