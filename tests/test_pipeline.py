@@ -44,6 +44,22 @@ def test_invoice_subject_is_protected_category():
     assert decision.verdict == Verdict.PROTECTED
 
 
+def test_order_confirmed_pair_protected_even_on_notification_domain(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    (tmp_path / "notification_senders.txt").write_text("mykeysmart.com 7\n")
+    config.load_notification_senders.cache_clear()
+    old = int(time.time() * 1000) - 60 * 86_400_000
+    m = meta(
+        sender_email="orders@mykeysmart.com",
+        sender_domain="mykeysmart.com",
+        subject="Order KS-1010919507 confirmed",
+        date_epoch_ms=old,
+    )
+    decision = decide(m, protected_senders=set())
+    config.load_notification_senders.cache_clear()
+    assert decision.verdict == Verdict.PROTECTED
+
+
 def test_clear_ad_decided_by_rules_without_llm():
     m = meta(
         subject="Last chance: 50% off — free shipping",

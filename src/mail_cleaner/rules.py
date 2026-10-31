@@ -62,7 +62,18 @@ def expired_score(meta: EmailMeta, now_ms: int | None = None) -> tuple[float, li
             expiry_days = days
             break
     if expiry_days is None:
-        return 0.0, []
+        # Shipping/delivery updates expire by subject for any sender.
+        subject = meta.subject.lower()
+        hit = next((k for k in config.SHIPPING_SUBJECT_KEYWORDS if k in subject), None)
+        if hit is None:
+            return 0.0, []
+        age_days = (now_ms - meta.date_epoch_ms) / 86_400_000
+        if age_days <= config.SHIPPING_EXPIRY_DAYS:
+            return 0.0, [f"shipping-update:{hit}:not-yet-expired"]
+        return 0.99, [
+            f"shipping-update:{hit}",
+            f"age:{age_days:.0f}d>expiry:{config.SHIPPING_EXPIRY_DAYS}d",
+        ]
 
     age_days = (now_ms - meta.date_epoch_ms) / 86_400_000
     if age_days <= expiry_days:

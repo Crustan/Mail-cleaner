@@ -65,3 +65,17 @@ def test_fresh_github_notification_not_expired():
     m = meta(sender_email="notifications@github.com", sender_domain="github.com")
     score, _ = expired_score(m)
     assert score == 0.0
+
+
+def test_old_shipping_update_expires_for_any_sender():
+    old = int(time.time() * 1000) - 30 * 86_400_000
+    m = meta(subject="Your order 919507 is on its way", date_epoch_ms=old)
+    score, signals = expired_score(m)
+    assert score >= 0.98
+    assert any(s.startswith("shipping-update:") for s in signals)
+
+
+def test_fresh_shipping_update_not_expired():
+    m = meta(subject="A shipment from order KS-1010919507 is on the way")
+    score, _ = expired_score(m)
+    assert score == 0.0

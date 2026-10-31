@@ -53,6 +53,30 @@ PROTECTED_SUBJECT_KEYWORDS = [
     "skatteverket", "försäkringskassan", "tax", "deklaration",
 ]
 
+# Subjects containing BOTH words of a pair are protected (order confirmations
+# phrased as "Order X confirmed" rather than "order confirmation").
+PROTECTED_SUBJECT_PAIRS = [
+    ("order", "confirmed"),
+    ("order", "bekräftad"),
+    ("beställning", "bekräftad"),
+    ("purchase", "confirmed"),
+    ("köp", "bekräftat"),
+]
+
+# Shipping/delivery updates expire by age for ANY sender (brief: "shipping
+# updates after delivery") — no per-store rule needed. Protected checks run
+# first, so confirmations and receipts are untouched.
+SHIPPING_SUBJECT_KEYWORDS = [
+    # English
+    "on its way", "on the way", "has shipped", "has been shipped",
+    "about to ship", "out for delivery", "was delivered", "has been delivered",
+    "shipment from", "a shipment", "tracking number", "track your order",
+    # Swedish
+    "på väg", "har skickats", "skickats från", "har levererats",
+    "är levererad", "redo att hämtas", "hämta ditt paket", "spåra din",
+]
+SHIPPING_EXPIRY_DAYS = 14
+
 # Domains never touched regardless of content. Extend via data/protected_domains.txt.
 PROTECTED_DOMAINS = {
     "skatteverket.se", "forsakringskassan.se", "1177.se",
