@@ -29,6 +29,7 @@ app = typer.Typer(
     "quarantine reviewed mail, teach it per sender. Run without a command for status.",
     invoke_without_command=True,
     no_args_is_help=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 console = Console()
 err = Console(stderr=True)
