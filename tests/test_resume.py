@@ -1,18 +1,53 @@
+from mail_cleaner import config
 from mail_cleaner.gmail_client import iter_messages
 from mail_cleaner.report import resume_ids
 
 
-def row(message_id: str, signals: list[str]) -> dict:
-    return {"message_id": message_id, "signals": signals}
+def row(
+    message_id: str,
+    signals: list[str],
+    verdict: str = "ad",
+    sender: str = "a@shop.example",
+) -> dict:
+    return {
+        "message_id": message_id,
+        "signals": signals,
+        "verdict": verdict,
+        "sender_email": sender,
+        "sender_domain": sender.rsplit("@", 1)[-1],
+    }
 
 
-def test_resume_ids_skips_decided_but_retries_llm_errors():
+def test_resume_ids_skips_decided_but_retries_llm_errors(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
     rows = [
         row("ok1", ["header:list-unsubscribe"]),
         row("ok2", ["llm:ad:newsletter"]),
         row("failed", ["header:list-unsubscribe", "llm:unsure:llm-error:APIConnectionError"]),
     ]
     assert resume_ids(rows) == {"ok1", "ok2"}
+
+
+def test_resume_reevaluates_keeps_hit_by_new_sender_rules(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    (tmp_path / "quarantine_senders.txt").write_text("shop.example\n")
+    rows = [
+        row("kept", [], verdict="keep", sender="news@shop.example"),
+        row("done", [], verdict="ad", sender="news@shop.example"),
+        row("other", [], verdict="keep", sender="x@other.example"),
+    ]
+    # "kept" is re-evaluated (new rule would flip it); the ad row and the
+    # unaffected keep stay skipped.
+    assert resume_ids(rows) == {"done", "other"}
+
+
+def test_resume_reevaluates_fresh_notification_keeps(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    rows = [
+        row("fresh", [], verdict="keep", sender="notifications@github.com"),
+        row("expired", [], verdict="expired", sender="notifications@github.com"),
+    ]
+    assert resume_ids(rows) == {"expired"}
 
 
 class FakeRequest:
