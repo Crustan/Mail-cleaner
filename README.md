@@ -27,14 +27,14 @@ Gmail inbox triage: classifies mail as **advertising**, **expired notification**
 
 ```bash
 mail-cleaner auth                 # one-time browser OAuth; verifies read access
-mail-cleaner shadow --days 7      # classify last 7 days of inbox, append to data/shadow_log.jsonl
+mail-cleaner scan --days 7      # classify last 7 days of inbox, append to data/shadow_log.jsonl
 mail-cleaner report               # per-sender totals, verdict split, LLM share, unsure list
 ```
 
 Scopes: `--scope inbox` (default), `--scope archive` (All Mail minus inbox — the backlog), `--scope all`. A backlog sweep:
 
 ```bash
-caffeinate -i mail-cleaner shadow --scope archive --days 3650   # caffeinate keeps the Mac awake (macOS)
+caffeinate -i mail-cleaner scan --scope archive --days 3650   # caffeinate keeps the Mac awake (macOS)
 mail-cleaner report
 ```
 
@@ -59,7 +59,7 @@ Filters are **label-only** (inbox-zero flow): the mail still lands in the inbox,
 Daily cleanup on a Mac — run the inbox sweep on a schedule (crontab -e):
 
 ```cron
-0 7,19 * * * cd /path/to/Mail-cleaner && .venv/bin/mail-cleaner shadow --scope archive --days 7 && .venv/bin/mail-cleaner apply --trash --yes && .venv/bin/mail-cleaner apply --labeled --yes >> data/cron.log 2>&1
+0 7,19 * * * cd /path/to/Mail-cleaner && .venv/bin/mail-cleaner scan --scope archive --days 7 && .venv/bin/mail-cleaner apply --trash --yes && .venv/bin/mail-cleaner apply --labeled --yes >> data/cron.log 2>&1
 ```
 
 (Archive-scope for inbox-zero users: mail stays in the inbox until you archive it; the sweep then classifies and removes what you're done with, and `--labeled` picks up filter-labeled mail you've archived.)
@@ -77,3 +77,7 @@ Sender-level rules, one address or domain per line: always keep in `data/protect
 ## Out of spike scope (by design)
 
 Quarantine moves, sender rules UI, digests, backlog sweeps, external-state expiry (PR closed, order delivered), Microsoft 365 / IMAP.
+
+## CLI
+
+Bare `mail-cleaner` prints a status dashboard with the suggested next command. `--version`, `mail-cleaner config` (effective settings), and shell completion (`mail-cleaner --install-completion`) are available. `scan` was previously named `shadow`; the old name still works.

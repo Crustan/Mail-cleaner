@@ -140,13 +140,17 @@ def describe_plan(planned: list[dict], trash: bool) -> str:
     return "\n".join(lines)
 
 
-def apply(service, planned: list[dict], trash: bool) -> tuple[str, Counter]:
-    """Execute the plan. Returns (run id for undo, per-outcome counts)."""
+def apply(
+    service, planned: list[dict], trash: bool, on_progress=None
+) -> tuple[str, Counter]:
+    """Execute the plan. Returns (run id for undo, per-outcome counts).
+    on_progress(processed) is called after each message when given."""
     label_ids = ensure_labels(service)
     run_id = uuid.uuid4().hex[:8]
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     outcomes: Counter = Counter()
+    processed = 0
     done = 0
     with config.ACTIONS_LOG.open("a") as log:
         for row in planned:
@@ -177,6 +181,9 @@ def apply(service, planned: list[dict], trash: bool) -> tuple[str, Counter]:
                     break
                 if exc.resp.status == 404:
                     outcomes[f"{row['verdict']}:missing"] += 1
+                    processed += 1
+                    if on_progress:
+                        on_progress(processed)
                     continue  # message gone since the shadow run
                 raise
             log.write(
@@ -194,7 +201,10 @@ def apply(service, planned: list[dict], trash: bool) -> tuple[str, Counter]:
             )
             outcomes[f"{row['verdict']}:done"] += 1
             done += 1
-            if done % 50 == 0:
+            processed += 1
+            if on_progress:
+                on_progress(processed)
+            elif done % 50 == 0:
                 print(f"...{done} applied", file=sys.stderr)
 
     return (run_id if done else ""), outcomes
