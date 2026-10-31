@@ -23,5 +23,8 @@ def protected_reason(meta: EmailMeta, protected_senders: set[str]) -> str | None
     for keyword in config.PROTECTED_SUBJECT_KEYWORDS:
         if keyword in subject:
             return f"protected-category:{keyword}"
+    for first, second in config.PROTECTED_SUBJECT_PAIRS:
+        if first in subject and second in subject:
+            return f"protected-category:{first}+{second}"
 
     return None

@@ -325,7 +325,8 @@ def triage(
     if counts:
         console.print(
             f"\nTriaged — ad: {counts['ad']}, notification: {counts['notification']}, "
-            f"protected: {counts['protect']}, skipped: {counts['skip']}."
+            f"protected: {counts['protect']}, skipped: {counts['skip']} "
+            f"({counts['accepted']} of these were ⏎-accepted suggestions)."
         )
         console.print(
             "Next: [bold cyan]mail-cleaner scan --scope archive --days 5000 "

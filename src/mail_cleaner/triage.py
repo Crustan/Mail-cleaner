@@ -51,15 +51,22 @@ def keep_senders(rows: list[dict], min_count: int = 3) -> list[dict]:
     )
 
 
-def suggest(senders: list[dict], client: anthropic.Anthropic | None = None) -> dict[str, dict]:
+def suggest(
+    senders: list[dict],
+    client: anthropic.Anthropic | None = None,
+    on_progress=None,
+) -> dict[str, dict]:
     """One LLM call per 30 senders; returns {sender: {category, days, reason}}.
-    Any failure returns what was parsed so far — triage works without it."""
+    on_progress(senders_processed) is called after each batch. Any failure
+    returns what was parsed so far — triage works without it."""
     if config.LLM_DISABLED:
         return {}
     client = client or anthropic.Anthropic()
     suggestions: dict[str, dict] = {}
     for start in range(0, len(senders), 30):
         chunk = senders[start : start + 30]
+        if on_progress:
+            on_progress(start)
         payload = [
             {
                 "sender": e["sender"],
@@ -99,10 +106,25 @@ def run_interactive(rows: list[dict], min_count: int = 3, use_llm: bool = True) 
 
     suggestions = {}
     if use_llm:
-        print(f"Asking {config.LLM_MODEL} for suggestions on {len(queue)} senders...")
-        suggestions = suggest(queue)
+        from rich.console import Console
+        from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn, TimeRemainingColumn
 
-    counts = {"ad": 0, "notification": 0, "protect": 0, "skip": 0}
+        with Progress(
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            MofNCompleteColumn(),
+            TimeRemainingColumn(),
+            console=Console(stderr=True),
+        ) as progress:
+            task = progress.add_task(
+                f"asking {config.LLM_MODEL} about senders", total=len(queue)
+            )
+            suggestions = suggest(
+                queue, on_progress=lambda n: progress.update(task, completed=n)
+            )
+            progress.update(task, completed=len(queue))
+
+    counts = {"ad": 0, "notification": 0, "protect": 0, "skip": 0, "accepted": 0}
     print("\nKeys: [a]d  [e]xpire 14d  [E]xpire custom  [p]rotect  [s]kip  [q]uit  ⏎=accept suggestion\n")
     for i, entry in enumerate(queue, 1):
         sender, domain = entry["sender"], entry["domain"]
@@ -111,31 +133,46 @@ def run_interactive(rows: list[dict], min_count: int = 3, use_llm: bool = True) 
             print(f"    · {subject[:70]}")
         hint = suggestions.get(sender)
         if hint:
-            days = f" {hint.get('days', 14)}d" if hint["category"] == "notification" else ""
-            print(f"    suggestion: {hint['category']}{days} — {hint.get('reason', '')[:70]}")
+            key, label = {
+                "ad": ("a", "ad"),
+                "notification": ("e", f"expire {hint.get('days', 14)}d"),
+                "keep": ("s", "keep (skip)"),
+            }[hint["category"]]
+            reason = hint.get("reason", "")
+            if len(reason) > 90:
+                reason = reason[:89] + "…"
+            print(f"    suggestion: ⏎ = [{key}] {label} — {reason}")
 
         try:
             choice = input("  > ").strip()
         except (EOFError, KeyboardInterrupt):
             print()
             break
+        accepted = ""
         if choice == "" and hint:
             choice = {"ad": "a", "notification": "e", "keep": "s"}[hint["category"]]
+            counts["accepted"] += 1
+            accepted = " (accepted suggestion)"
         if choice == "q":
             break
         elif choice == "a":
             config.add_quarantine_senders({sender})
             counts["ad"] += 1
+            print(f"    → ad{accepted}: {sender} added to the quarantine list")
         elif choice in ("e", "E"):
             days = hint.get("days", 14) if (hint and choice == "e") else 14
             if choice == "E":
                 days = int(input("  days until expired: ").strip() or "14")
             config.add_notification_sender(domain, days)
-            print(f"    note: expiry applies to the whole domain {domain}")
             counts["notification"] += 1
+            print(
+                f"    → notification{accepted}: whole domain {domain} expires after {days}d"
+            )
         elif choice == "p":
             config.add_protected_senders({sender})
             counts["protect"] += 1
+            print(f"    → protected: {sender} never touched again")
         else:
             counts["skip"] += 1
+            print(f"    → skipped{accepted}: no rule saved, reappears next session")
     return counts
