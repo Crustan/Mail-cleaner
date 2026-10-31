@@ -38,7 +38,7 @@ caffeinate -i mail-cleaner scan --scope archive --days 3650   # caffeinate keeps
 mail-cleaner report
 ```
 
-Sweeps are interruptible: every decision is persisted as it happens, and rerunning the same command resumes — already-classified mail is skipped at list speed (no metadata fetch, no LLM; failed LLM calls are retried). `--fresh` clears the log and starts over. A connection lost mid-run (e.g. the machine slept) reconnects automatically; if it still fails, progress is saved and the printed message says to rerun.
+The shadow log is the tool's memory — resume, apply dedup, triage state — so never delete it by hand; `scan --fresh` is the sanctioned start-over. Sweeps are interruptible: every decision is persisted as it happens, and rerunning the same command resumes — already-classified mail is skipped at list speed (no metadata fetch, no LLM; failed LLM calls are retried). `--fresh` clears the log and starts over. A connection lost mid-run (e.g. the machine slept) reconnects automatically; if it still fails, progress is saved and the printed message says to rerun.
 
 Acting on verdicts (phase 2 — after reviewing the report; first re-auth for the modify scope with `rm token.json && mail-cleaner auth`):
 
