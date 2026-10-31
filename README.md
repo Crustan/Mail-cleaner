@@ -5,7 +5,7 @@ Gmail inbox triage: classifies mail as **advertising**, **expired notification**
 ## Safety properties
 
 - **No send scope, no permanent deletion.** Phase 2 uses `gmail.modify`: labels and Gmail trash only. Trash is Gmail-reversible for 30 days and purged by the provider — the brief's retention window, enforced by Gmail itself.
-- **Dry run by default.** `apply` only prints its per-sender plan; `--yes` executes, and every run is undoable (`mail-cleaner undo --run <id>`).
+- **Dry run by default.** `apply` only prints its per-sender plan; `--execute` acts on it (`--yes` still works as an alias), and every run is undoable (`mail-cleaner undo --run <id>`).
 - **Protected beats predicted**: starred/important/sent mail, protected categories (receipts, invoices, security, travel, government — Swedish and English) and your allowlist are excluded before any classification runs.
 - **Metadata first**: classification uses headers, labels and the Gmail snippet. Full bodies and attachments are never fetched, and nothing but the decision log is stored.
 - **LLM is the last layer**: most mail is decided by header rules; only rule-ambiguous mail (expected: a small share) reaches the model, with addresses and digit runs masked first.
@@ -44,22 +44,22 @@ Acting on verdicts (phase 2 — after reviewing the report; first re-auth for th
 
 ```bash
 mail-cleaner apply                      # dry run: per-sender plan, nothing happens
-mail-cleaner apply --yes                # label as Cleanup/Ads / Cleanup/Expired
-mail-cleaner apply --trash --yes        # or move to Gmail trash (30-day auto-purge)
+mail-cleaner apply --execute                # label as Cleanup/Ads / Cleanup/Expired
+mail-cleaner apply --trash --execute        # or move to Gmail trash (30-day auto-purge)
 mail-cleaner undo --run <id>            # reverse a run (id printed by apply)
 mail-cleaner rescue --sender x@y.se     # restore that sender's mail + always keep them
 mail-cleaner filters                    # dry run: stable ad senders worth a native Gmail filter
-mail-cleaner filters --yes              # create the filters (label Cleanup/Ads + skip inbox)
+mail-cleaner filters --execute              # create the filters (label Cleanup/Ads + skip inbox)
 ```
 
 Native filters run inside Gmail at delivery — zero API/LLM cost, works when the tool is off. Only consistently-ad senders qualify (≥ 3 ad verdicts, zero keep/protected); expiry can't be a filter since it's age-based. The `filters` command needs the `gmail.settings.basic` scope — re-consent with `rm token.json && mail-cleaner auth` after upgrading.
 
-Filters are **label-only** (inbox-zero flow): the mail still lands in the inbox, pre-labeled. Read it, archive it as usual — then `mail-cleaner apply --labeled --yes` trashes everything that is Cleanup-labeled and no longer in the inbox. The label is the decision; your archiving is the trigger. No classification or LLM involved, and it's logged/undoable like any apply run.
+Filters are **label-only** (inbox-zero flow): the mail still lands in the inbox, pre-labeled. Read it, archive it as usual — then `mail-cleaner apply --labeled --execute` trashes everything that is Cleanup-labeled and no longer in the inbox. The label is the decision; your archiving is the trigger. No classification or LLM involved, and it's logged/undoable like any apply run.
 
 Daily cleanup on a Mac — run the inbox sweep on a schedule (crontab -e):
 
 ```cron
-0 7,19 * * * cd /path/to/Mail-cleaner && .venv/bin/mail-cleaner scan --scope archive --days 7 && .venv/bin/mail-cleaner apply --trash --yes && .venv/bin/mail-cleaner apply --labeled --yes >> data/cron.log 2>&1
+0 7,19 * * * cd /path/to/Mail-cleaner && .venv/bin/mail-cleaner scan --scope archive --days 7 && .venv/bin/mail-cleaner apply --trash --execute && .venv/bin/mail-cleaner apply --labeled --execute >> data/cron.log 2>&1
 ```
 
 (Archive-scope for inbox-zero users: mail stays in the inbox until you archive it; the sweep then classifies and removes what you're done with, and `--labeled` picks up filter-labeled mail you've archived.)
